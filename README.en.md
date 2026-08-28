@@ -68,7 +68,7 @@ is the format that restores everything, imported icons included.
 
 | File | Purpose |
 |---|---|
-| `editeur-carte.html` | the whole application |
+| `mapgineer.html` | the whole application |
 | `user-guide.md` | the full guide, in English, with how to add a locale |
 | `guide-utilisateur.md` | the same in French |
 | `LICENSE.md` | the license and the rights it grants, in detail |
