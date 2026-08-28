@@ -55,7 +55,7 @@ It all fits in one HTML file: no install, no server, no account. Open it in a br
 
 ## Getting started
 
-1. Download `editeur-carte.html`.
+1. Download `mapgineer.html`.
 2. Open it in a recent browser (Chrome, Firefox, Edge, Safari).
 3. Click anywhere on the map: the first place, and its first type, are created in one go.
 
