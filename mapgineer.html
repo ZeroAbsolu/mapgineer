@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Mapgineer — éditeur de carte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;1,400;1,600&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Cinzel:wght@400;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#0E1A24; --panel:#152532; --panel-2:#1B3040; --rule:#25404F;
+    --ink:#DCE7EC; --ink-dim:#7E9AA8; --brass:#E8B04B; --alert:#E2564C;
+    --grid1:#1D3141; --grid2:#25404F; --sym-fill:rgba(14,26,36,.55); --veil:rgba(6,12,17,.68);
+    --cc-invert:1;
+    --display:"Barlow Condensed","Avenir Next Condensed","Helvetica Neue",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  html[data-theme="clair"]{
+    --ground:#F3EDE1; --panel:#FFFCF4; --panel-2:#EBE1CD; --rule:#D5C9B0;
+    --ink:#2A2118; --ink-dim:#7A6A52; --brass:#A9761A; --alert:#BF3B2E;
+    --grid1:#E4DAC5; --grid2:#D2C4A8; --sym-fill:rgba(255,252,244,.78); --veil:rgba(60,48,30,.45);
+    --cc-invert:0;
+  }
+  #bg{fill:var(--ground)}
+  #grid path{stroke:var(--grid1)}
+  #grid-lg path{stroke:var(--grid2)}
+  .sym-fill{fill:var(--sym-fill)}
+  .sym-edge{stroke:var(--ground)}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--ground);color:var(--ink);font-family:var(--mono);font-size:13px;
+    overflow:hidden;-webkit-tap-highlight-color:transparent}
+
+  header{position:fixed;inset:0 0 auto 0;z-index:20;display:flex;align-items:center;gap:16px;
+    flex-wrap:wrap;padding:9px 16px;background:linear-gradient(180deg,rgba(14,26,36,.97),rgba(14,26,36,.84));
+    border-bottom:1px solid var(--rule);backdrop-filter:blur(6px)}
+  .brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+  .brand h1{font-family:var(--display);font-weight:600;font-size:22px;letter-spacing:.22em;
+    text-transform:uppercase;margin:0}
+  .brand span{color:var(--ink-dim);font-size:11px;letter-spacing:.08em}
+  .group{display:flex;align-items:center;gap:8px;min-width:0}
+  .group>label{font-family:var(--display);text-transform:uppercase;letter-spacing:.16em;
+    font-size:11px;color:var(--ink-dim);flex:none}
+  .seg{display:flex;border:1px solid var(--rule);border-radius:2px;max-width:min(38vw,340px);
+    overflow-x:auto;scrollbar-width:thin}
+  .seg button{font-family:var(--mono);font-size:11.5px;background:transparent;color:var(--ink-dim);
+    border:0;border-right:1px solid var(--rule);padding:6px 10px;cursor:pointer;
+    display:flex;align-items:center;gap:7px;white-space:nowrap;flex:none}
+  .seg button:last-child{border-right:0}
+  .seg button:hover{color:var(--ink);background:var(--panel)}
+  .seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--ink)}
+  .seg .plus{color:var(--brass);font-size:14px;padding:6px 11px}
+  .seg .empty{color:var(--ink-dim);font-style:normal;padding:6px 10px;cursor:default}
+  .seg .empty:hover{background:transparent}
+  .act{font-family:var(--display);text-transform:uppercase;letter-spacing:.14em;font-size:12px;
+    background:transparent;border:1px solid var(--rule);color:var(--ink-dim);padding:7px 12px;
+    border-radius:2px;cursor:pointer}
+  .act:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .act.danger:hover{color:var(--alert);border-color:var(--alert)}
+  .act.go{border-color:var(--brass);color:var(--brass)}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+  #stage{position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;display:block}
+  #stage.panning{cursor:grabbing}
+  #stage.calib{cursor:move}
+  .grid{pointer-events:none}
+  .hit{cursor:pointer}
+  text{user-select:none;pointer-events:none}
+  .n-label{font-family:var(--display);letter-spacing:.11em;text-transform:uppercase;fill:var(--ink)}
+  .cost{font-family:var(--mono);font-size:10.5px;font-weight:500;fill:var(--ink)}
+  .halo{stroke:var(--ground);stroke-width:4.5;paint-order:stroke;stroke-opacity:.85}
+  .handle{cursor:move;fill:var(--panel)}
+
+  #callout{position:fixed;z-index:30;pointer-events:none;opacity:0;transform:translateY(3px);
+    transition:opacity .12s ease,transform .12s ease;background:var(--panel);border:1px solid var(--rule);
+    border-left:2px solid var(--brass);padding:9px 12px 10px;min-width:172px;max-width:270px;
+    box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  #callout.on{opacity:1;transform:translateY(0)}
+  #callout .k{font-family:var(--display);text-transform:uppercase;letter-spacing:.18em;font-size:10px;
+    color:var(--ink-dim);display:block;margin-bottom:2px}
+  #callout .t{font-family:var(--display);font-size:17px;letter-spacing:.1em;text-transform:uppercase;line-height:1.15}
+  #callout dl{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin:9px 0 0;padding-top:8px;
+    border-top:1px solid var(--rule);font-size:11.5px}
+  #callout dt{color:var(--ink-dim)}
+  #callout dd{margin:0;text-align:right;font-weight:500}
+
+  .plate{position:fixed;z-index:15;background:rgba(21,37,50,.9);border:1px solid var(--rule);
+    padding:10px 12px;backdrop-filter:blur(4px)}
+  #legend{left:16px;bottom:34px;max-height:58vh;overflow:auto;min-width:150px}
+  #legend.hidden{display:none}
+  #legend h2{font-family:var(--display);text-transform:uppercase;letter-spacing:.18em;font-size:10px;
+    color:var(--ink-dim);margin:0 0 8px}
+  #legend h2+h2,#legend ul+h2{margin-top:13px}
+  #legend ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  #legend li{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--ink-dim)}
+  #legend li img{width:22px;height:22px;object-fit:contain}
+  #meter{right:16px;bottom:34px;display:flex;gap:14px;font-size:11px;color:var(--ink-dim);align-items:center}
+  #meter b{color:var(--ink);font-weight:500}
+  .zoom{display:flex;gap:4px;align-items:center;padding-left:12px;border-left:1px solid var(--rule)}
+  .zoom button{width:25px;height:25px;background:transparent;border:1px solid var(--rule);color:var(--ink-dim);
+    font-family:var(--mono);font-size:14px;line-height:1;cursor:pointer;border-radius:2px;padding:0}
+  .zoom button.wide{width:auto;padding:0 9px;font-family:var(--display);font-size:10px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .zoom button:hover{color:var(--ink);border-color:var(--ink-dim)}
+  #hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;text-align:center;
+    color:var(--ink-dim);pointer-events:none;transition:opacity .3s;max-width:420px}
+  #hint p{font-family:var(--display);font-size:19px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 6px}
+  #hint small{letter-spacing:.04em;line-height:1.6}
+
+  #calib{left:50%;bottom:34px;transform:translateX(-50%);display:none;gap:16px;align-items:center;flex-wrap:wrap}
+  #calib.on{display:flex}
+  #calib .f{display:grid;gap:6px}
+  .fl{font-family:var(--display);text-transform:uppercase;letter-spacing:.16em;font-size:10px;
+    color:var(--ink-dim);display:block}
+  .val{font-size:11px;color:var(--ink);min-width:44px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:130px;height:3px;background:var(--rule);
+    border-radius:2px;outline:none;margin:0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+    background:var(--brass);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;
+    background:var(--brass);cursor:pointer}
+
+  #veil{position:fixed;inset:0;z-index:40;background:var(--veil);display:none;
+    align-items:center;justify-content:center;padding:20px}
+  #veil.on{display:flex}
+  .dlg{background:var(--panel);border:1px solid var(--rule);border-top:2px solid var(--brass);
+    width:min(470px,100%);max-height:88vh;overflow:auto;padding:20px}
+  .dlg h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.2em;font-size:13px;margin:0 0 3px}
+  .dlg .sub{color:var(--ink-dim);font-size:11.5px;margin:0 0 14px;line-height:1.5}
+  .dlg .fl{margin:0 0 6px}
+  .fld{margin-top:15px}
+  .fld:first-of-type{margin-top:0}
+  .dlg input[type=text]{width:100%;background:var(--ground);border:1px solid var(--rule);color:var(--ink);
+    font-family:var(--mono);font-size:15px;padding:10px 12px;border-radius:2px}
+  .srow{display:flex;align-items:center;gap:10px}
+  .tiles{display:flex;flex-wrap:wrap;gap:6px;max-height:210px;overflow:auto}
+  .tiles button{width:88px;background:var(--ground);border:1px solid var(--rule);border-radius:2px;
+    padding:6px 4px;cursor:pointer;color:var(--ink-dim);font-family:var(--mono);font-size:9.5px;
+    display:grid;gap:4px;justify-items:center}
+  .tiles button:hover{border-color:var(--ink-dim);color:var(--ink)}
+  .tiles button[aria-pressed="true"]{border-color:var(--brass);color:var(--ink);background:var(--panel-2)}
+  .tiles .thumb{width:76px;height:30px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .tiles .thumb img{max-width:100%;max-height:100%}
+  .tiles .cap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .hues{display:flex;flex-wrap:wrap;gap:6px}
+  .hues button{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+  .hues button[aria-pressed="true"]{border-color:var(--ink)}
+  .dlg .row{display:flex;gap:8px;margin-top:20px;justify-content:flex-end}
+  .dlg .row .spacer{margin-right:auto}
+  .hidden{display:none !important}
+
+  .textrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .dlg select{background:var(--ground);border:1px solid var(--rule);color:var(--ink);font-family:var(--mono);
+    font-size:12.5px;padding:8px 9px;border-radius:2px;flex:1;min-width:150px}
+  .tgl{display:flex;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+  .tgl button{width:34px;height:34px;background:transparent;border:0;border-right:1px solid var(--rule);
+    color:var(--ink-dim);cursor:pointer;font-family:"EB Garamond",serif;font-size:15px;padding:0}
+  .tgl button:last-child{border-right:0}
+  .tgl button[aria-pressed="true"]{background:var(--panel-2);color:var(--brass)}
+  .tgl .i{font-style:italic}
+  .tgl .u{text-decoration:underline}
+  .tgl .b{font-weight:700}
+  .tgl .c{font-size:11px;letter-spacing:.04em}
+  .colrow{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .colrow .fl{margin:0;flex:0 0 62px}
+  .hues.sm button{width:20px;height:20px;border-width:2px}
+  .hues .none{background:var(--ground);position:relative;overflow:hidden}
+  .hues .none::after{content:"";position:absolute;inset:-2px;border-top:1px solid var(--alert);
+    transform:rotate(45deg);transform-origin:center}
+  .prev{margin-top:12px;border:1px solid var(--rule);border-radius:2px;overflow:hidden;line-height:0}
+  .tglset{display:flex;gap:8px;flex-wrap:wrap}
+  .tglset .tg{font-family:var(--mono);font-size:11.5px;background:transparent;border:1px solid var(--rule);
+    color:var(--ink-dim);padding:8px 12px;border-radius:2px;cursor:pointer}
+  .tglset .tg[aria-pressed="true"]{border-color:var(--brass);color:var(--brass);background:var(--panel-2)}
+  .sl{margin-top:13px}
+  .sl:first-child{margin-top:0}
+  .sl input[type=range]{width:100%;max-width:none}
+  .sl .srow{gap:12px}
+
+  #license{
+    position:fixed;left:0;right:0;bottom:0;z-index:16;text-align:center;
+    font-size:10.5px;line-height:1.4;padding:5px 12px 6px;color:var(--ink-dim);
+    background:linear-gradient(to top,var(--ground) 55%,transparent);
+    pointer-events:none;
+  }
+  #license a{color:var(--ink-dim);text-decoration:none;border-bottom:1px dotted var(--rule);pointer-events:auto}
+  #license a:hover{color:var(--ink);border-bottom-color:var(--ink-dim)}
+  #license img{width:1em;height:1em;vertical-align:-.12em;margin-left:.2em;opacity:.72;
+    filter:invert(var(--cc-invert))}
+
+  .menuwrap{position:relative}
+  .menu{position:absolute;right:0;top:calc(100% + 7px);background:var(--panel);border:1px solid var(--rule);
+    box-shadow:0 14px 34px rgba(0,0,0,.5);display:grid;min-width:262px;z-index:30}
+  .menu button{background:transparent;border:0;border-bottom:1px solid var(--rule);color:var(--ink-dim);
+    font-family:var(--mono);font-size:11.5px;text-align:left;padding:10px 12px;cursor:pointer;line-height:1.45}
+  .menu button:last-child{border-bottom:0}
+  .menu button:hover{background:var(--panel-2);color:var(--ink)}
+  .menu small{display:block;color:var(--ink-dim);opacity:.75;font-size:10px}
+  .params{display:grid;gap:6px}
+  .prow{display:flex;gap:6px;align-items:center}
+  .prow input{flex:1;min-width:0;background:var(--ground);border:1px solid var(--rule);color:var(--ink);
+    font-family:var(--mono);font-size:13px;padding:7px 9px;border-radius:2px}
+  .prow input.pk{flex:0 0 42%}
+  .prow .px{width:28px;height:28px;flex:none;background:transparent;border:1px solid var(--rule);
+    color:var(--ink-dim);border-radius:2px;cursor:pointer;line-height:1;padding:0}
+  .prow .px:hover{color:var(--alert);border-color:var(--alert)}
+  .addp{margin-top:8px;font-family:var(--display);text-transform:uppercase;letter-spacing:.14em;font-size:11px;
+    background:transparent;border:1px dashed var(--rule);color:var(--ink-dim);padding:6px 11px;
+    border-radius:2px;cursor:pointer}
+  .addp:hover{color:var(--brass);border-color:var(--brass)}
+
+  .seg .edit{display:inline-flex;align-items:center;opacity:.45;margin-left:2px}
+  .seg button:hover .edit,.seg button[aria-pressed="true"] .edit{opacity:1}
+  .seg .edit:hover{color:var(--brass)}
+  .flag{width:21px;height:14px;flex:none;border:1px solid var(--rule);display:block}
+  .menu .li{display:flex;align-items:center;gap:10px}
+  #btnLang{display:flex;align-items:center;gap:8px}
+  #legend li{cursor:pointer}
+  #legend li:hover{color:var(--ink)}
+
+  @media (max-width:900px){ .brand span{display:none} header{gap:10px;padding:8px 10px} #legend{display:none} }
+  @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><h1>Mapgineer</h1><span data-i18n="app.sub"></span></div>
+  <div class="group"><label data-i18n="tb.places"></label><div class="seg" id="nodeTools"></div></div>
+  <div class="group"><label data-i18n="tb.links"></label><div class="seg" id="linkTools"></div></div>
+  <div class="group">
+    <label data-i18n="tb.texts"></label>
+    <div class="seg"><button id="btnAutoAll" data-i18n="btn.autoAll" data-i18n-title="btn.autoAllT"></button></div>
+  </div>
+  <div class="group">
+    <label data-i18n="tb.bg"></label>
+    <div class="seg">
+      <button id="btnImg" data-i18n="btn.image"></button>
+      <button id="btnCalib" aria-pressed="false" data-i18n="btn.calib"></button>
+      <button id="btnGrid" aria-pressed="true" data-i18n="btn.grid"></button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="seg">
+      <button id="btnTheme" data-i18n="btn.theme" data-i18n-title="btn.themeT"></button>
+    </div>
+    <span class="menuwrap">
+      <button class="act" id="btnLang"><span id="langFlag"></span><span id="langName"></span></button>
+      <div class="menu hidden" id="langMenu"></div>
+    </span>
+    <span class="menuwrap">
+      <button class="act" id="btnExport" data-i18n="btn.export"></button>
+      <div class="menu hidden" id="exportMenu">
+        <button data-x="png"><span data-i18n="menu.png"></span><small data-i18n="menu.pngSub"></small></button>
+        <button data-x="data"><span data-i18n="menu.data"></span><small data-i18n="menu.dataSub"></small></button>
+        <button data-x="full"><span data-i18n="menu.full"></span><small data-i18n="menu.fullSub"></small></button>
+      </div>
+    </span>
+    <button class="act" id="btnImport" data-i18n="btn.import"></button>
+    <span class="menuwrap">
+      <button class="act danger" id="btnReset" data-i18n="btn.reset"></button>
+      <div class="menu hidden" id="resetMenu">
+        <button data-r="els"><span data-i18n="menu.clearEls"></span><small data-i18n="menu.clearElsSub"></small></button>
+        <button data-r="types"><span data-i18n="menu.resetTypes"></span><small data-i18n="menu.resetTypesSub"></small></button>
+        <button data-r="bg"><span data-i18n="menu.removeBg"></span><small data-i18n="menu.removeBgSub"></small></button>
+        <button data-r="all"><span data-i18n="menu.resetAll"></span><small data-i18n="menu.resetAllSub"></small></button>
+      </div>
+    </span>
+  </div>
+</header>
+
+<svg id="stage">
+  <defs>
+    <pattern id="grid" width="26" height="26" patternUnits="userSpaceOnUse">
+      <path d="M26 0H0V26" fill="none" stroke-width="1"/>
+    </pattern>
+    <pattern id="grid-lg" width="130" height="130" patternUnits="userSpaceOnUse">
+      <path d="M130 0H0V130" fill="none" stroke-width="1"/>
+    </pattern>
+    <filter id="rough" x="-12%" y="-12%" width="124%" height="124%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="rough2" x="-12%" y="-12%" width="124%" height="124%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+  <rect id="bg" x="0" y="0" width="100%" height="100%"/>
+  <rect class="grid" id="gridS" x="0" y="0" width="100%" height="100%" fill="url(#grid)"/>
+  <rect class="grid" id="gridL" x="0" y="0" width="100%" height="100%" fill="url(#grid-lg)"/>
+  <g id="world">
+    <image id="bgImg" x="0" y="0" preserveAspectRatio="none" style="display:none" pointer-events="none"/>
+    <g id="gLinks"></g><g id="gGhost"></g><g id="gNodes"></g><g id="gLabels"></g>
+  </g>
+</svg>
+
+<div id="hint">
+  <p data-i18n="hint.title"></p>
+  <small data-i18n="hint.body"></small>
+</div>
+
+<div id="callout" role="status" aria-live="polite"></div>
+<aside class="plate hidden" id="legend"></aside>
+
+<div class="plate" id="meter">
+  <span><span data-i18n="meter.places"></span> <b id="mNodes">0</b></span>
+  <span><span data-i18n="meter.links"></span> <b id="mLinks">0</b></span>
+  <span><span data-i18n="meter.scale"></span> <b id="mZoom">100%</b></span>
+  <span class="zoom">
+    <button id="btnZoomOut" data-i18n-title="zoom.out">−</button>
+    <button id="btnZoomIn" data-i18n-title="zoom.in">+</button>
+    <button class="wide" id="btnFitView" data-i18n="zoom.fit" data-i18n-title="zoom.fitT"></button>
+  </span>
+</div>
+
+<div class="plate" id="calib">
+  <div class="f"><label class="fl" data-i18n="calib.scale"></label>
+    <input type="range" id="rScale" min="5" max="400" step="1" value="100"></div>
+  <span class="val" id="vScale">100%</span>
+  <div class="f"><label class="fl" data-i18n="calib.opacity"></label>
+    <input type="range" id="rOpacity" min="10" max="100" step="1" value="70"></div>
+  <span class="val" id="vOpacity">70%</span>
+  <button class="act" id="btnFitImg" data-i18n="calib.fit"></button>
+  <button class="act danger" id="btnImgDel" data-i18n="calib.remove"></button>
+  <button class="act go" id="btnCalibDone" data-i18n="calib.done"></button>
+</div>
+
+<div id="veil">
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <h3 id="dTitle"></h3>
+    <p class="sub" id="dSub"></p>
+    <div class="fld" id="dFieldWrap">
+      <label class="fl" id="dLabel" for="dInput"></label>
+      <input type="text" id="dInput" autocomplete="off">
+    </div>
+    <div class="fld" id="dTilesWrap">
+      <label class="fl" id="dTilesLabel"></label>
+      <div class="tiles" id="dTiles"></div>
+    </div>
+    <div class="fld" id="dHueWrap">
+      <label class="fl" data-i18n="dlg.color"></label>
+      <div class="hues" id="dHues"></div>
+    </div>
+    <div class="fld" id="dTextWrap">
+      <label class="fl" data-i18n="dlg.textStyle"></label>
+      <div class="textrow">
+        <select id="dFont"></select>
+        <div class="tgl" id="dTextStyle">
+          <button class="b" data-g="bold" data-i18n-title="dlg.bold">G</button>
+          <button class="i" data-g="italic" data-i18n-title="dlg.italic">I</button>
+          <button class="u" data-g="underline" data-i18n-title="dlg.underline">S</button>
+          <button class="c" data-g="upper" data-i18n-title="dlg.upper">AA</button>
+        </div>
+      </div>
+      <div class="colrow"><span class="fl" data-i18n="dlg.letters"></span><div class="hues sm" id="dInk"></div></div>
+      <div class="colrow"><span class="fl" data-i18n="dlg.outline"></span><div class="hues sm" id="dHalo"></div></div>
+      <div class="prev" id="dTextPrev"></div>
+    </div>
+    <div class="fld" id="dTogglesWrap"><div class="tglset" id="dToggles"></div></div>
+    <div class="fld" id="dSlidersWrap"><div id="dSliders"></div></div>
+    <div class="fld" id="dParamsWrap">
+      <label class="fl" id="dParamsLabel"></label>
+      <div class="params" id="dParams"></div>
+      <button class="addp" id="dParamAdd" data-i18n="pa.add"></button>
+    </div>
+    <div class="row">
+      <button class="act danger spacer hidden" id="dDelete" data-i18n="dlg.delete"></button>
+      <button class="act" id="dCancel" data-i18n="dlg.cancel"></button>
+      <button class="act go" id="dOk" data-i18n="dlg.ok"></button>
+    </div>
+  </div>
+</div>
+
+<footer id="license">
+  <a href="https://github.com/ZeroAbsolu/mapgineer" target="_blank" rel="noopener">Mapgineer</a>
+  © 2026 <span data-i18n="lic.by"></span>
+  <a href="https://github.com/ZeroAbsolu" target="_blank" rel="noopener">Kevin NIVA</a>
+  <span data-i18n="lic.under"></span>
+  <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a><img
+    src="https://mirrors.creativecommons.org/presskit/icons/cc.svg" alt="CC"><img
+    src="https://mirrors.creativecommons.org/presskit/icons/by.svg" alt="BY"><img
+    src="https://mirrors.creativecommons.org/presskit/icons/nc.svg" alt="NC"><img
+    src="https://mirrors.creativecommons.org/presskit/icons/sa.svg" alt="SA">
+</footer>
+
+<input type="file" id="filePicker" accept="application/json,.json" hidden>
+<input type="file" id="imgPicker" accept="image/*" hidden>
+<input type="file" id="iconPicker" accept="image/*" hidden>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================ palette ============================ */
+
+const HUES = ["#EADFC4","#E8B04B","#C9A26B","#DCE7EC","#6FD3C7","#9FCF6A","#C2A0F0","#E2564C"];
+
+/* ============================ langues ============================ */
+
+const LANGS = [
+  {id:"fr", name:"Français", flag:`<svg class="flag" viewBox="0 0 9 6"><rect width="3" height="6" fill="#0055A4"/>
+    <rect x="3" width="3" height="6" fill="#fff"/><rect x="6" width="3" height="6" fill="#EF4135"/></svg>`},
+  {id:"en", name:"English", flag:`<svg class="flag" viewBox="0 0 60 30"><rect width="60" height="30" fill="#012169"/>
+    <path d="M0 0 60 30M60 0 0 30" stroke="#fff" stroke-width="6"/>
+    <path d="M0 0 60 30M60 0 0 30" stroke="#C8102E" stroke-width="3.5"/>
+    <path d="M30 0V30M0 15H60" stroke="#fff" stroke-width="10"/>
+    <path d="M30 0V30M0 15H60" stroke="#C8102E" stroke-width="6"/></svg>`}
+];
+
+const I18N = {
+fr:{
+ "app.sub":"éditeur de carte",
+ "tb.places":"Lieux","tb.links":"Liaisons","tb.texts":"Textes","tb.bg":"Fond",
+ "btn.autoAll":"Placement auto","btn.autoAllT":"Replacer tous les textes automatiquement",
+ "btn.image":"Image…","btn.calib":"Caler","btn.grid":"Grille",
+ "btn.theme":"Thème clair","btn.themeT":"Basculer entre thème sombre et clair",
+ "btn.export":"Exporter","btn.import":"Importer","btn.reset":"Réinitialiser",
+ "menu.png":"Image PNG","menu.pngSub":"Fond calé + lieux et liaisons, aplatis",
+ "menu.data":"Données JSON","menu.dataSub":"Éléments, types, icônes et matrice — sans le fond",
+ "menu.full":"Carte complète JSON","menu.fullSub":"Les données et l'image de fond",
+ "menu.clearEls":"Effacer les éléments","menu.clearElsSub":"Lieux et liaisons ; types et fond conservés",
+ "menu.resetTypes":"Réinitialiser les types","menu.resetTypesSub":"Types, icônes et éléments : on repart de zéro",
+ "menu.removeBg":"Retirer le fond","menu.removeBgSub":"L'image de fond et son calage",
+ "menu.resetAll":"Tout réinitialiser","menu.resetAllSub":"Éléments, types et fond",
+ "hint.title":"Carte vierge",
+ "hint.body":"Cliquez n'importe où pour poser un premier lieu : vous définirez son type au passage, et la légende se construira à mesure.",
+ "meter.places":"Lieux","meter.links":"Liaisons","meter.scale":"Échelle",
+ "zoom.out":"Dézoomer","zoom.in":"Zoomer","zoom.fit":"Cadrer","zoom.fitT":"Tout afficher",
+ "calib.scale":"Échelle du fond","calib.opacity":"Opacité","calib.fit":"Ajuster",
+ "calib.remove":"Retirer","calib.done":"Terminer",
+ "leg.places":"Lieux","leg.links":"Liaisons",
+ "co.place":"Lieu","co.link":"Liaison","co.links":"Liaisons","co.position":"Position",
+ "co.curve":"Courbure","co.distance":"Distance",
+ "tt.noType":"Aucun type","tt.editType":"Modifier ce type",
+ "tt.newPlaceType":"Nouveau type de lieu","tt.newLinkType":"Nouveau type de liaison",
+ "dlg.color":"Couleur","dlg.textStyle":"Style du texte","dlg.letters":"Lettres","dlg.outline":"Contour",
+ "dlg.bold":"Gras","dlg.italic":"Italique","dlg.underline":"Souligné","dlg.upper":"Majuscules",
+ "dlg.cancel":"Annuler","dlg.ok":"Valider","dlg.delete":"Supprimer","dlg.name":"Nom",
+ "pa.title":"Paramètres","pa.add":"+ Ajouter un paramètre","pa.namePh":"Nom du paramètre","pa.valuePh":"Valeur",
+ "pa.empty":"Aucun paramètre. Ajoutez ceux dont vous avez besoin — coût, durée, garnison…",
+ "pa.forType":"Paramètres proposés pour ce type","pa.cost":"Coût",
+ "ti.newType":"Nouveau type…","ti.import":"Importer…","ti.image":"Image",
+ "ti.visual":"Visuel","ti.trace":"Tracé","ti.placeType":"Type de lieu","ti.linkType":"Type de liaison",
+ "ty.placeNew":"Nouveau type de lieu","ty.placeEdit":"Modifier le type de lieu",
+ "ty.placeSub":"Choisissez un symbole ou importez une image. Le nom que vous donnez devient un type, listé dans la légende.",
+ "ty.linkNew":"Nouveau type de liaison","ty.linkEdit":"Modifier le type de liaison",
+ "ty.linkSub":"Choisissez un tracé et sa teinte. Le nom que vous donnez devient un type, listé dans la légende.",
+ "ty.name":"Nom du type","ty.placePh":"Ex. Cité fortifiée","ty.linkPh":"Ex. Voie royale",
+ "ty.symbolSize":"Taille du symbole","ty.textSize":"Taille du texte","ty.samplePlace":"Nom du lieu",
+ "el.newPlace":"Nouveau lieu","el.newPlaceSub":"Son nom, son type, et les paramètres que vous voulez lui attacher.",
+ "el.editPlace":"Modifier le lieu","el.editPlaceSub":"Nom, type, paramètres et placement du texte.",
+ "el.placeName":"Nom du lieu",
+ "el.newLink":"Nouvelle liaison","el.editLink":"Modifier la liaison",
+ "el.linkSub":"De {a} vers {b}. Ajoutez les paramètres de votre choix.",
+ "el.editLinkSub":"Type, paramètres, courbure et placement du texte.",
+ "el.curve":"Courbure du tracé","el.autoLabel":"Placement auto du texte",
+ "el.angle":"Orientation du texte autour de l'élément","el.dist":"Éloignement",
+ "lic.by":"par","lic.under":"est distribué sous licence",
+ "sp.title":"Scinder la liaison","sp.junction":"Croisée",
+ "sp.sub":"Un nouveau lieu est posé sur le tracé. Nommez-le, puis indiquez le coût de chaque moitié.",
+ "sp.first":"Première moitié","sp.second":"Seconde moitié",
+ "al.badImage":"Image illisible : essayez un PNG, JPG ou WebP.",
+ "al.badFile":"Fichier illisible : ce n'est pas une carte exportée depuis Mapgineer.",
+ "al.nothing":"Rien à exporter pour l'instant : posez au moins un lieu ou importez un fond.",
+ "al.flatten":"L'aplatissement en image a échoué.",
+ "al.clearEls":"Effacer tous les lieux et liaisons ? Les types et le fond sont conservés.",
+ "al.resetTypes":"Supprimer tous les types, leurs icônes et tous les éléments de la carte ?",
+ "al.resetAll":"Tout réinitialiser : éléments, types et image de fond ?",
+ "al.typeUsed":"{n} élément(s) utilisent « {name} ». Les supprimer aussi ?",
+ "fo.display":"Titrage condensé","fo.cinzel":"Capitales romaines","fo.fell":"Ancienne presse",
+ "fo.garamond":"Garamond","fo.uncial":"Onciale","fo.mono":"Machine à écrire","fo.sans":"Sans système",
+ "co.auto":"Selon le thème","co.none":"Sans contour",
+ "tr.0":"Sentier à traverses","tr.1":"Piste large","tr.2":"Sente pointillée","tr.3":"Sente tiretée",
+ "tr.4":"Route","tr.5":"Chaussée pavée","tr.6":"Voie ferrée","tr.7":"Chaîne","tr.8":"Cours d'eau",
+ "tr.9":"Fil ténu","tr.10":"Voie barrée","tr.11":"Voie fléchée",
+ "sy.0":"Ville","sy.1":"Capitale","sy.2":"Village","sy.3":"Lieu-dit","sy.4":"Contrée","sy.5":"Montagne",
+ "sy.6":"Forêt","sy.7":"Tour","sy.8":"Ruine","sy.9":"Port","sy.10":"Croisée","sy.11":"Repère"
+},
+en:{
+ "app.sub":"map editor",
+ "tb.places":"Places","tb.links":"Links","tb.texts":"Labels","tb.bg":"Backdrop",
+ "btn.autoAll":"Auto placement","btn.autoAllT":"Re-place every label automatically",
+ "btn.image":"Image…","btn.calib":"Align","btn.grid":"Grid",
+ "btn.theme":"Light theme","btn.themeT":"Switch between dark and light theme",
+ "btn.export":"Export","btn.import":"Import","btn.reset":"Reset",
+ "menu.png":"PNG image","menu.pngSub":"Aligned backdrop + places and links, flattened",
+ "menu.data":"JSON data","menu.dataSub":"Elements, types, icons and matrix — without the backdrop",
+ "menu.full":"Full map JSON","menu.fullSub":"The data and the backdrop image",
+ "menu.clearEls":"Clear elements","menu.clearElsSub":"Places and links; types and backdrop kept",
+ "menu.resetTypes":"Reset types","menu.resetTypesSub":"Types, icons and elements: start over",
+ "menu.removeBg":"Remove backdrop","menu.removeBgSub":"The backdrop image and its alignment",
+ "menu.resetAll":"Reset everything","menu.resetAllSub":"Elements, types and backdrop",
+ "hint.title":"Blank map",
+ "hint.body":"Click anywhere to drop a first place: you will define its type on the way, and the legend builds itself as you go.",
+ "meter.places":"Places","meter.links":"Links","meter.scale":"Scale",
+ "zoom.out":"Zoom out","zoom.in":"Zoom in","zoom.fit":"Fit","zoom.fitT":"Show everything",
+ "calib.scale":"Backdrop scale","calib.opacity":"Opacity","calib.fit":"Fit",
+ "calib.remove":"Remove","calib.done":"Done",
+ "leg.places":"Places","leg.links":"Links",
+ "co.place":"Place","co.link":"Link","co.links":"Links","co.position":"Position",
+ "co.curve":"Curvature","co.distance":"Distance",
+ "tt.noType":"No type yet","tt.editType":"Edit this type",
+ "tt.newPlaceType":"New place type","tt.newLinkType":"New link type",
+ "dlg.color":"Colour","dlg.textStyle":"Label style","dlg.letters":"Letters","dlg.outline":"Outline",
+ "dlg.bold":"Bold","dlg.italic":"Italic","dlg.underline":"Underlined","dlg.upper":"Uppercase",
+ "dlg.cancel":"Cancel","dlg.ok":"Confirm","dlg.delete":"Delete","dlg.name":"Name",
+ "pa.title":"Parameters","pa.add":"+ Add a parameter","pa.namePh":"Parameter name","pa.valuePh":"Value",
+ "pa.empty":"No parameter yet. Add the ones you need — cost, duration, garrison…",
+ "pa.forType":"Parameters offered for this type","pa.cost":"Cost",
+ "ti.newType":"New type…","ti.import":"Import…","ti.image":"Image",
+ "ti.visual":"Visual","ti.trace":"Line style","ti.placeType":"Place type","ti.linkType":"Link type",
+ "ty.placeNew":"New place type","ty.placeEdit":"Edit place type",
+ "ty.placeSub":"Pick a symbol or import an image. The name you give becomes a type, listed in the legend.",
+ "ty.linkNew":"New link type","ty.linkEdit":"Edit link type",
+ "ty.linkSub":"Pick a line style and its hue. The name you give becomes a type, listed in the legend.",
+ "ty.name":"Type name","ty.placePh":"E.g. Walled city","ty.linkPh":"E.g. King's road",
+ "ty.symbolSize":"Symbol size","ty.textSize":"Label size","ty.samplePlace":"Place name",
+ "el.newPlace":"New place","el.newPlaceSub":"Its name, its type, and any parameters you want to attach.",
+ "el.editPlace":"Edit place","el.editPlaceSub":"Name, type, parameters and label placement.",
+ "el.placeName":"Place name",
+ "el.newLink":"New link","el.editLink":"Edit link",
+ "el.linkSub":"From {a} to {b}. Add whichever parameters you need.",
+ "el.editLinkSub":"Type, parameters, curvature and label placement.",
+ "el.curve":"Line curvature","el.autoLabel":"Automatic label placement",
+ "el.angle":"Label orientation around the element","el.dist":"Distance",
+ "lic.by":"by","lic.under":"is licensed under",
+ "sp.title":"Split the link","sp.junction":"Crossing",
+ "sp.sub":"A new place is dropped on the line. Name it, then give the cost of each half.",
+ "sp.first":"First half","sp.second":"Second half",
+ "al.badImage":"Unreadable image: try a PNG, JPG or WebP.",
+ "al.badFile":"Unreadable file: this is not a map exported from Mapgineer.",
+ "al.nothing":"Nothing to export yet: drop at least one place or import a backdrop.",
+ "al.flatten":"Flattening to an image failed.",
+ "al.clearEls":"Clear every place and link? Types and backdrop are kept.",
+ "al.resetTypes":"Delete every type, their icons and all elements on the map?",
+ "al.resetAll":"Reset everything: elements, types and backdrop image?",
+ "al.typeUsed":"{n} element(s) use “{name}”. Delete them too?",
+ "fo.display":"Condensed display","fo.cinzel":"Roman capitals","fo.fell":"Old press",
+ "fo.garamond":"Garamond","fo.uncial":"Uncial","fo.mono":"Typewriter","fo.sans":"System sans",
+ "co.auto":"Follows the theme","co.none":"No outline",
+ "tr.0":"Tie trail","tr.1":"Wide track","tr.2":"Dotted path","tr.3":"Dashed path",
+ "tr.4":"Road","tr.5":"Paved way","tr.6":"Railway","tr.7":"Chain","tr.8":"Watercourse",
+ "tr.9":"Thin line","tr.10":"Barred way","tr.11":"Arrowed way",
+ "sy.0":"City","sy.1":"Capital","sy.2":"Village","sy.3":"Hamlet","sy.4":"Region","sy.5":"Mountain",
+ "sy.6":"Forest","sy.7":"Tower","sy.8":"Ruin","sy.9":"Harbour","sy.10":"Crossroads","sy.11":"Marker"
+}};
+
+let lang = "fr", theme = "sombre";
+function t(key, vars){
+  let v = (I18N[lang] && I18N[lang][key]) ?? I18N.fr[key] ?? key;
+  if(vars) for(const k in vars) v = v.split("{"+k+"}").join(vars[k]);
+  return v;
+}
+const THEME_INK = {sombre:{ink:"#DCE7EC", ground:"#0E1A24"}, clair:{ink:"#2A2118", ground:"#F3EDE1"}};
+const inkOf = c => c === "auto" ? THEME_INK[theme].ink : c;
+const haloOf = c => c === "auto" ? THEME_INK[theme].ground : c;
+
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll("[data-i18n-title]").forEach(el => el.title = t(el.dataset.i18nTitle));
+  const cur = LANGS.find(l => l.id === lang) || LANGS[0];
+  $("#langFlag").innerHTML = cur.flag;
+  $("#langName").textContent = cur.name;
+  $("#langMenu").innerHTML = LANGS.map(l =>
+    `<button data-l="${l.id}"><span class="li">${l.flag}${l.name}</span></button>`).join("");
+  render();
+}
+function applyTheme(){
+  document.documentElement.dataset.theme = theme;
+  $("#btnTheme").textContent = theme === "sombre" ? t("btn.theme") : (lang === "fr" ? "Thème sombre" : "Dark theme");
+  render();
+}
+
+/* ---- polices et style de texte ---- */
+const FONTS = [
+  {id:"display", css:"'Barlow Condensed','Helvetica Neue',sans-serif", track:.11, ratio:.44},
+  {id:"cinzel",  css:"'Cinzel',Georgia,serif", track:.07, ratio:.62},
+  {id:"fell",    css:"'IM Fell English',Georgia,serif", track:.02, ratio:.48},
+  {id:"garamond",css:"'EB Garamond',Georgia,serif", track:.02, ratio:.46},
+  {id:"uncial",  css:"'Uncial Antiqua',cursive", track:.05, ratio:.62},
+  {id:"mono",    css:"'IBM Plex Mono',Menlo,monospace", track:.02, ratio:.6},
+  {id:"sans",    css:"system-ui,'Segoe UI',sans-serif", track:.01, ratio:.52}
+];
+const INKS  = ["auto","#DCE7EC","#EADFC4","#FFFFFF","#E8B04B","#C9A26B","#9FCF6A","#6FD3C7","#C2A0F0","#E2564C","#2A2118","#0E1A24"];
+const HALOS = ["auto","none","#0E1A24","#2A2118","#FFFFFF","#EADFC4","#E8B04B","#E2564C"];
+const DEF_LABEL = {font:"display", size:13, bold:false, italic:false, underline:false,
+                   upper:true, color:"auto", halo:"auto"};
+const lblStyle = ty => ({...DEF_LABEL, ...((ty && ty.label) || {})});
+const traceName = i => t("tr."+i);
+const symbolName = i => t("sy."+i);
+const fontOf = st => FONTS.find(f => f.id === st.font) || FONTS[0];
+const labelPos = new Map();     // positions calculées, hors sauvegarde
+
+function shade(hex, f){                       // f<0 assombrit, f>0 éclaircit
+  const n = parseInt(hex.slice(1), 16);
+  const t = f < 0 ? 0 : 255, a = Math.abs(f);
+  const r = Math.round(((n>>16)&255) + (t-((n>>16)&255))*a);
+  const g = Math.round(((n>>8)&255) + (t-((n>>8)&255))*a);
+  const b = Math.round((n&255) + (t-(n&255))*a);
+  return "#" + ((1<<24) + (r<<16) + (g<<8) + b).toString(16).slice(1);
+}
+
+/* ---- tracés de liaison : chaque couche est un passage de plume ---- */
+const TRACES = [
+  {rough:1, layers:c=>[{w:5.5,color:c},{w:5.5,color:shade(c,-.6),dash:"1.8 6"}]},
+  {rough:1, layers:c=>[{w:9,color:c,op:.92},{w:9,color:shade(c,-.55),dash:"2.4 11"}]},
+  {rough:1, layers:c=>[{w:3,color:c,dash:"0.1 7",cap:"round"}]},
+  {rough:1, layers:c=>[{w:2.2,color:c,dash:"8 5",cap:"round"}]},
+  {layers:c=>[{w:7.5,color:c,op:.32},{w:3.4,color:c}]},
+  {rough:1, layers:c=>[{w:6.5,color:c},{w:6.5,color:shade(c,-.55),dash:"1.1 3.6"},{w:1,color:shade(c,-.45)}]},
+  {layers:c=>[{w:1.6,color:c},{w:8,color:c,dash:"1.6 9"}]},
+  {layers:c=>[{w:4.4,color:c,dash:"5 4",cap:"round"},{w:1.6,color:shade(c,-.65),dash:"5 4"}]},
+  {rough:2, layers:c=>[{w:5,color:c,op:.85},{w:1.2,color:shade(c,.4),op:.55}]},
+  {layers:c=>[{w:1.1,color:c}]},
+  {rough:1, layers:c=>[{w:2.4,color:c,dash:"11 7"},{w:11,color:c,dash:"1.7 18"}]},
+  {arrow:1, layers:c=>[{w:2,color:c,dash:"9 5"}]}
+];
+
+/* ---- symboles de lieu ---- */
+const SYMBOLS = [
+  {r:15, d:c=>`<polygon points="13,0 6.5,11.3 -6.5,11.3 -13,0 -6.5,-11.3 6.5,-11.3"
+      class="sym-fill" stroke="${c}" stroke-width="2.2"/><circle r="4" fill="${c}"/>`},
+  {r:17, d:c=>`<path d="M0 -16 4.7 -5.2 16 -4.9 7.2 2.3 10.2 13.2 0 6.8 -10.2 13.2 -7.2 2.3 -16 -4.9 -4.7 -5.2Z"
+      fill="${c}" class="sym-edge" stroke-width="1.2"/>`},
+  {r:12, d:c=>`<circle r="9.5" class="sym-fill" stroke="${c}" stroke-width="2"/>
+      <circle r="3" fill="${c}"/>`},
+  {r:9, d:c=>`<rect x="-7" y="-7" width="14" height="14" transform="rotate(45)"
+      fill="${c}" class="sym-edge" stroke-width="1.4"/>`},
+  {r:30, d:c=>`<circle r="30" fill="${c}" fill-opacity=".07" stroke="${c}"
+      stroke-width="1.5" stroke-dasharray="4 6"/><circle r="2.5" fill="${c}" fill-opacity=".8"/>`},
+  {r:14, d:c=>`<path d="M-16 10 -5 -10 2 2 7 -5 16 10Z" class="sym-fill"
+      stroke="${c}" stroke-width="2" stroke-linejoin="round"/>`},
+  {r:14, d:c=>`<g stroke="${c}" stroke-width="1.8" fill="none">
+      <path d="M-9 8v-4M-9 4l-5 0 5-8 5 8-5 0M9 8v-4M9 4l-5 0 5-8 5 8-5 0M0 12v-4M0 8l-5 0 5-8 5 8-5 0"/></g>`},
+  {r:14, d:c=>`<path d="M-6 12V-4l6-8 6 8v16Z" class="sym-fill" stroke="${c}"
+      stroke-width="2" stroke-linejoin="round"/><path d="M-6 -2h12" stroke="${c}" stroke-width="1.5"/>`},
+  {r:13, d:c=>`<g stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round">
+      <path d="M-11 11V-2l4-4v8M-3 11V-8l5 5v14M6 11V-1l5 3v9M-13 12h26"/></g>`},
+  {r:13, d:c=>`<g stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round">
+      <circle cy="-8" r="3"/><path d="M0 -5v15M-8 -2h16M-11 5a11 11 0 0 0 22 0"/></g>`},
+  {r:11, d:c=>`<g stroke="${c}" stroke-width="2.2" stroke-linecap="round">
+      <path d="M-9 -9 9 9M9 -9 -9 9"/></g>`},
+  {r:9, d:c=>`<circle r="5" fill="${c}"/><circle r="9" fill="none" stroke="${c}"
+      stroke-width="1.2" stroke-dasharray="2 3"/>`}
+];
+
+/* ============================ état ============================ */
+
+let nodeTypes = [];  // {id,name,color,symbol|null,icon|null,size}
+let linkTypes = [];  // {id,name,color,trace}
+let nodes = [];      // {id,typeId,name,x,y}
+let links = [];      // {id,typeId,cost,a,b,curve}
+let icons = [];      // {id,src,w,h}
+let seq = 1;
+let bg = {src:null, x:0, y:0, w:0, h:0, scale:1, opacity:.7};
+let view = {x:0, y:0, k:1};
+
+let toolNode = null, toolLink = null;
+let gridOn = true, calibMode = false;
+let armed = null, hover = null, selected = null;
+let history = [];
+
+const $ = s => document.querySelector(s);
+const svg = $("#stage"), world = $("#world"), gLinks = $("#gLinks"),
+      gNodes = $("#gNodes"), gGhost = $("#gGhost"), callout = $("#callout"), veil = $("#veil");
+const nodeById = id => nodes.find(n => n.id === id);
+const linkById = id => links.find(l => l.id === id);
+const iconById = id => icons.find(i => i.id === id);
+const ntById = id => nodeTypes.find(t => t.id === id);
+const ltById = id => linkTypes.find(t => t.id === id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clampK = k => Math.min(4, Math.max(.1, k));
+
+/* ============================ vue ============================ */
+
+function applyView(){
+  const pt = `translate(${view.x} ${view.y}) scale(${view.k})`;
+  world.setAttribute("transform", pt);
+  $("#grid").setAttribute("patternTransform", pt);
+  $("#grid-lg").setAttribute("patternTransform", pt);
+  $("#gridS").style.display = (gridOn && view.k > .45) ? "" : "none";
+  $("#gridL").style.display = gridOn ? "" : "none";
+  $("#mZoom").textContent = Math.round(view.k*100) + "%";
+}
+function toWorld(ev){
+  const r = svg.getBoundingClientRect();
+  return {x:(ev.clientX - r.left - view.x)/view.k, y:(ev.clientY - r.top - view.y)/view.k};
+}
+function zoomAt(mx, my, f){
+  const k2 = clampK(view.k*f);
+  view.x = mx - (mx - view.x)*(k2/view.k);
+  view.y = my - (my - view.y)*(k2/view.k);
+  view.k = k2; applyView();
+}
+function fitView(){
+  const pts = nodes.map(n => [n.x, n.y]);
+  if(bg.src) pts.push([bg.x, bg.y], [bg.x + bg.w*bg.scale, bg.y + bg.h*bg.scale]);
+  const r = svg.getBoundingClientRect();
+  if(!pts.length){ view = {x:0,y:0,k:1}; applyView(); return; }
+  const xs = pts.map(p=>p[0]), ys = pts.map(p=>p[1]);
+  const x0 = Math.min(...xs)-70, x1 = Math.max(...xs)+70;
+  const y0 = Math.min(...ys)-70, y1 = Math.max(...ys)+70;
+  view.k = clampK(Math.min(r.width/(x1-x0), (r.height-110)/(y1-y0)));
+  view.x = r.width/2 - (x0+x1)/2*view.k;
+  view.y = r.height/2 - (y0+y1)/2*view.k;
+  applyView();
+}
+
+/* ============================ image de fond ============================ */
+
+function renderBg(){
+  const el = $("#bgImg");
+  if(!bg.src){ el.style.display = "none"; return; }
+  el.setAttribute("href", bg.src);
+  el.setAttribute("x", bg.x); el.setAttribute("y", bg.y);
+  el.setAttribute("width", Math.max(1, bg.w*bg.scale));
+  el.setAttribute("height", Math.max(1, bg.h*bg.scale));
+  el.setAttribute("opacity", bg.opacity);
+  el.style.display = "";
+}
+function setBgScale(s){
+  s = Math.min(6, Math.max(.05, s));
+  const cx = bg.x + bg.w*bg.scale/2, cy = bg.y + bg.h*bg.scale/2;
+  bg.scale = s; bg.x = cx - bg.w*s/2; bg.y = cy - bg.h*s/2;
+}
+function fitBgToScreen(){
+  if(!bg.src) return;
+  const r = svg.getBoundingClientRect();
+  const s = Math.min((r.width/view.k)/bg.w, (r.height/view.k)/bg.h)*.88;
+  const cx = (r.width/2 - view.x)/view.k, cy = (r.height/2 - view.y)/view.k;
+  bg.scale = s;
+  bg.x = Math.round(cx - bg.w*s/2); bg.y = Math.round(cy - bg.h*s/2);
+}
+function setCalib(on){
+  calibMode = on && !!bg.src;
+  $("#calib").classList.toggle("on", calibMode);
+  $("#btnCalib").setAttribute("aria-pressed", String(calibMode));
+  svg.classList.toggle("calib", calibMode);
+  syncCalib();
+}
+function syncCalib(){
+  $("#rScale").value = Math.round(bg.scale*100);
+  $("#vScale").textContent = Math.round(bg.scale*100) + "%";
+  $("#rOpacity").value = Math.round(bg.opacity*100);
+  $("#vOpacity").textContent = Math.round(bg.opacity*100) + "%";
+}
+function readImage(file, maxSize){
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = rej;
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = rej;
+      im.onload = () => {
+        const w = im.naturalWidth, h = im.naturalHeight;
+        if(maxSize && Math.max(w,h) > maxSize){
+          const s = maxSize/Math.max(w,h);
+          const c = document.createElement("canvas");
+          c.width = Math.round(w*s); c.height = Math.round(h*s);
+          c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+          res({src:c.toDataURL("image/png"), w:c.width, h:c.height});
+        } else res({src:fr.result, w, h});
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+/* ============================ tracés ============================ */
+
+function tracePaths(t, d, opts){                 // t = type de liaison
+  const tr = TRACES[t.trace] || TRACES[0];
+  const layers = tr.layers(t.color);
+  const o = opts || {};
+  let s = `<g${tr.rough ? ` filter="url(#rough${tr.rough === 2 ? "2" : ""})"` : ""}`
+        + ` opacity="${o.hot ? 1 : .92}">`;
+  // la zone d'un filtre se calcule sur la boîte du contenu : une ligne horizontale
+  // a une boîte plate, d'où ce rectangle invisible qui lui donne de la hauteur
+  if(tr.rough && o.box)
+    s += `<rect x="${o.box.x}" y="${o.box.y}" width="${o.box.w}" height="${o.box.h}" fill="none" stroke="none"/>`;
+  for(const L of layers)
+    s += `<path d="${d}" fill="none" stroke="${L.color}" stroke-width="${L.w}"`
+       + `${L.dash ? ` stroke-dasharray="${L.dash}"` : ""} stroke-linecap="${L.cap || "butt"}"`
+       + `${L.op ? ` opacity="${L.op}"` : ""}/>`;
+  s += `</g>`;
+  return s;
+}
+function pathBox(pts, pad){
+  const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+  const x = Math.min(...xs)-pad, y = Math.min(...ys)-pad;
+  return {x, y, w:Math.max(...xs)+pad-x, h:Math.max(...ys)+pad-y};
+}
+function arrowHead(t, g){
+  const tr = TRACES[t.trace];
+  if(!tr || !tr.arrow) return "";
+  const b = nodeById(g.linkB), from = g.ctrl || nodeById(g.linkA);
+  const dx = b.x - from.x, dy = b.y - from.y, len = Math.hypot(dx,dy) || 1;
+  const ux = dx/len, uy = dy/len, back = 13;
+  const tipX = b.x - ux*10, tipY = b.y - uy*10;
+  const p1 = [tipX - ux*back - uy*5.5, tipY - uy*back + ux*5.5];
+  const p2 = [tipX - ux*back + uy*5.5, tipY - uy*back - ux*5.5];
+  return `<polygon points="${tipX},${tipY} ${p1[0]},${p1[1]} ${p2[0]},${p2[1]}" fill="${t.color}"/>`;
+}
+function traceThumb(t, dispW = 76){              // aperçu horizontal pour les tuiles et la légende
+  const W = 84, H = 30, y = H/2;                 // dessiné large, affiché à la taille voulue
+  const tr = TRACES[t.trace] || TRACES[0];
+  const end = tr.arrow ? W-14 : W-4;
+  const d = `M4 ${y}H${end}`;
+  const arrow = tr.arrow
+    ? `<polygon points="${W-2},${y} ${W-15},${y-5.5} ${W-15},${y+5.5}" fill="${t.color}"/>` : "";
+  return `<svg width="${dispW}" height="${(dispW*H/W).toFixed(1)}" viewBox="0 0 ${W} ${H}"
+    style="overflow:visible">${tracePaths(t, d, {hot:true, box:{x:0,y:0,w:W,h:H}})}${arrow}</svg>`;
+}
+function symbolThumb(t, box = 30){
+  if(t.icon){ const ic = iconById(t.icon); return ic ? `<img src="${ic.src}" alt="">` : ""; }
+  const sym = SYMBOLS[t.symbol] || SYMBOLS[0];
+  const s = (box/2 - 2)/sym.r;
+  return `<svg width="${box}" height="${box}" viewBox="0 0 ${box} ${box}">
+    <g transform="translate(${box/2} ${box/2}) scale(${s.toFixed(3)})">${sym.d(t.color)}</g></svg>`;
+}
+
+/* ============================ géométrie ============================ */
+
+function linkGeom(l){
+  const a = nodeById(l.a), b = nodeById(l.b);
+  if(!a || !b) return null;
+  const dx = b.x-a.x, dy = b.y-a.y, len = Math.hypot(dx,dy) || 1;
+  const mx = (a.x+b.x)/2, my = (a.y+b.y)/2, c = l.curve || 0;
+  const px = -dy/len, py = dx/len;
+  if(!c) return {d:`M${a.x} ${a.y} L${b.x} ${b.y}`, apex:{x:mx,y:my}, mid:{x:mx,y:my},
+                 len, px, py, A:a, B:b, linkA:l.a, linkB:l.b, ctrl:null};
+  const cx = mx + px*c*len, cy = my + py*c*len;
+  return {d:`M${a.x} ${a.y} Q${cx} ${cy} ${b.x} ${b.y}`,
+          apex:{x:(a.x + 2*cx + b.x)/4, y:(a.y + 2*cy + b.y)/4}, mid:{x:mx,y:my},
+          len, px, py, A:a, B:b, linkA:l.a, linkB:l.b, ctrl:{x:cx, y:cy}};
+}
+/* ---- paramètres libres portés par les éléments ---- */
+function mainParam(el, type){                    // valeur affichée sur la carte
+  const p = el.params || {};
+  for(const f of (type && type.fields) || []) if(p[f] != null && p[f] !== "") return p[f];
+  const v = Object.values(p).find(x => x != null && x !== "");
+  return v == null ? "" : v;
+}
+function paramRows(type, existing){
+  const rows = [], fields = (type && type.fields) || [];
+  fields.forEach(f => rows.push({k:f, v:existing && existing[f] != null ? existing[f] : ""}));
+  if(existing) Object.keys(existing).forEach(k => { if(!fields.includes(k)) rows.push({k, v:existing[k]}); });
+  return rows;
+}
+function mergeRows(rows, type){                  // complète avec les champs du type choisi
+  const have = new Set(rows.map(r => r.k.trim()));
+  ((type && type.fields) || []).forEach(f => { if(!have.has(f)) rows.push({k:f, v:""}); });
+  return rows;
+}
+const rowsToObj = rows => Object.fromEntries((rows||[]).filter(r => r.k.trim()).map(r => [r.k.trim(), r.v]));
+function rememberFields(type, rows){             // les champs saisis deviennent ceux du type
+  const fields = type.fields ? type.fields.slice() : [];
+  (rows||[]).forEach(r => { const k = r.k.trim(); if(k && !fields.includes(k)) fields.push(k); });
+  type.fields = fields;
+}
+
+function nodeRadius(n){
+  const t = ntById(n.typeId); if(!t) return 16;
+  if(t.icon){ const ic = iconById(t.icon); return ic ? Math.max(16, t.size/2) : 16; }
+  const sym = SYMBOLS[t.symbol] || SYMBOLS[0];
+  return Math.max(14, sym.r*(t.size/56));
+}
+
+/* ============================ rendu ============================ */
+
+/* ============================ textes ============================ */
+
+function pointOn(g, t){
+  if(!g.ctrl) return {x:g.A.x + (g.B.x-g.A.x)*t, y:g.A.y + (g.B.y-g.A.y)*t};
+  const u = 1-t;
+  return {x:u*u*g.A.x + 2*u*t*g.ctrl.x + t*t*g.B.x, y:u*u*g.A.y + 2*u*t*g.ctrl.y + t*t*g.B.y};
+}
+function textSize(txt, st){
+  const f = fontOf(st);
+  const w = txt.length * st.size * (f.ratio + (f.track || 0)) * (st.bold ? 1.05 : 1);
+  return {w:Math.max(st.size*.8, w), h:st.size*1.15};
+}
+function labelBox(center, ang, dist, dim){
+  const r = ang*Math.PI/180, ax = Math.cos(r), ay = Math.sin(r);
+  const cx = center.x + ax*dist, cy = center.y + ay*dist;
+  const anchor = ax > .35 ? "start" : ax < -.35 ? "end" : "middle";
+  const ty = cy + (ay > .35 ? dim.h*.82 : ay < -.35 ? -dim.h*.16 : dim.h*.34);
+  const x = anchor === "start" ? cx : anchor === "end" ? cx - dim.w : cx - dim.w/2;
+  return {x, y:ty - dim.h*.8, w:dim.w, h:dim.h, tx:cx, ty, anchor};
+}
+const overlap = (a,b) => a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h;
+const inBox = (p,b,m) => p.x > b.x-m && p.x < b.x+b.w+m && p.y > b.y-m && p.y < b.y+b.h+m;
+
+function layoutLabels(){
+  labelPos.clear();
+  const solids = nodes.map(n => { const r = nodeRadius(n);
+    return {id:n.id, x:n.x-r, y:n.y-r, w:2*r, h:2*r}; });
+  const strokes = [];
+  links.forEach(l => {
+    const g = linkGeom(l); if(!g) return;
+    for(let i=0;i<=10;i++) strokes.push({id:l.id, ...pointOn(g, i/10)});
+  });
+  const placed = [];
+
+  const put = (el, type, text, center, defDist, defAngle) => {
+    const st = lblStyle(type);
+    const txt = st.upper ? String(text).toUpperCase() : String(text);
+    const dim = textSize(txt, st);
+    const lab = el.label || {};
+    let cands;
+    if(lab.auto === false){
+      cands = [{a:lab.angle ?? defAngle, d:lab.dist ?? defDist}];
+    } else {
+      cands = [];
+      for(const mult of [1, 1.45, 2]) 
+        for(let i=0;i<12;i++){
+          const step = Math.ceil(i/2)*30*(i%2 ? -1 : 1);
+          cands.push({a:defAngle + step, d:defDist*mult});
+        }
+    }
+    let best = null;
+    for(let i=0;i<cands.length;i++){
+      const c = cands[i], b = labelBox(center, c.a, c.d, dim);
+      let score = i*0.04;                                   // préférence pour les premiers essais
+      for(const p of placed) if(overlap(b,p)) score += 3;
+      for(const s of solids) if(s.id !== el.id && overlap(b,s)) score += 2;
+      for(const s of strokes) if(s.id !== el.id && inBox(s, b, 1)) score += .6;
+      if(best === null || score < best.score) best = {score, b, c};
+      if(score <= i*0.04) break;                            // aucune gêne : on s'arrête
+    }
+    placed.push(best.b);
+    labelPos.set(el.id, {...best.b, st, txt});
+  };
+
+  nodes.forEach(n => { const t = ntById(n.typeId); if(t && n.name) put(n, t, n.name, {x:n.x,y:n.y}, nodeRadius(n)+15, 90); });
+  links.forEach(l => {
+    const t = ltById(l.typeId), g = linkGeom(l); if(!t || !g) return;
+    const tag = mainParam(l, t);
+    if(tag !== "") put(l, t, tag, g.apex, 16, -90);
+  });
+}
+function nearestT(g, p){                      // paramètre du point du tracé le plus proche
+  let best = .5, bd = Infinity;
+  for(let i = 1; i < 100; i++){
+    const tt = i/100, q = pointOn(g, tt);
+    const d = (q.x-p.x)**2 + (q.y-p.y)**2;
+    if(d < bd){ bd = d; best = tt; }
+  }
+  return Math.min(.92, Math.max(.08, best));
+}
+function curveOf(a, c, b){                    // courbure équivalente pour un contrôle donné
+  const dx = b.x-a.x, dy = b.y-a.y, len = Math.hypot(dx,dy) || 1;
+  const v = ((c.x - (a.x+b.x)/2)*(-dy/len) + (c.y - (a.y+b.y)/2)*(dx/len))/len;
+  return Math.abs(v) < .02 ? 0 : v;
+}
+function splitQuad(g, tt){                    // De Casteljau : deux moitiés exactes
+  const P0 = g.A, P2 = g.B;
+  const P1 = g.ctrl || {x:(g.A.x+g.B.x)/2, y:(g.A.y+g.B.y)/2};
+  const lerp = (p,q,u) => ({x:p.x + (q.x-p.x)*u, y:p.y + (q.y-p.y)*u});
+  const Q1 = lerp(P0,P1,tt), R1 = lerp(P1,P2,tt), M = lerp(Q1,R1,tt);
+  return {point:M, first:curveOf(P0,Q1,M), second:curveOf(M,R1,P2)};
+}
+
+function labelMarkup(id, kind){
+  const lp = labelPos.get(id); if(!lp) return "";
+  const st = lp.st, f = fontOf(st);
+  const halo = st.halo && st.halo !== "none"
+    ? ` stroke="${haloOf(st.halo)}" stroke-width="${Math.max(2, st.size*.3).toFixed(2)}" stroke-linejoin="round"`
+      + ` paint-order="stroke" stroke-opacity=".9"` : "";
+  return `<text x="${lp.tx.toFixed(1)}" y="${lp.ty.toFixed(1)}" text-anchor="${lp.anchor}"
+      font-size="${st.size}" font-family="${f.css}"${st.bold ? ` font-weight="600"` : ""}`
+    + `${st.italic ? ` font-style="italic"` : ""}${st.underline ? ` text-decoration="underline"` : ""}`
+    + ` letter-spacing="${((f.track||0)*st.size).toFixed(2)}" fill="${inkOf(st.color)}"${halo}>${esc(lp.txt)}</text>`
+    + `<rect class="hit" data-label="${id}" data-lkind="${kind}" x="${lp.x.toFixed(1)}" y="${lp.y.toFixed(1)}"
+        width="${lp.w.toFixed(1)}" height="${lp.h.toFixed(1)}" fill="transparent"/>`;
+}
+function renderLabels(){
+  let out = "";
+  nodes.forEach(n => out += labelMarkup(n.id, "node"));
+  links.forEach(l => out += labelMarkup(l.id, "link"));
+  $("#gLabels").innerHTML = out;
+}
+
+function renderLinks(){
+  let out = "";
+  for(const l of links){
+    const g = linkGeom(l), t = ltById(l.typeId);
+    if(!g || !t) continue;
+    const hot = (hover && hover.kind === "link" && hover.id === l.id) || selected === l.id;
+    const pts = [nodeById(l.a), nodeById(l.b)]; if(g.ctrl) pts.push(g.ctrl);
+    out += tracePaths(t, g.d, {hot, box:pathBox(pts, 24)});
+    out += arrowHead(t, g);
+    out += `<path class="hit" data-link="${l.id}" d="${g.d}" fill="none" stroke="transparent" stroke-width="18"/>`;
+    if(selected === l.id)
+      out += `<circle class="hit handle" data-handle="${l.id}" cx="${g.apex.x}" cy="${g.apex.y}" r="7"
+                fill="#152532" stroke="#E8B04B" stroke-width="2"/>
+              <circle cx="${g.apex.x}" cy="${g.apex.y}" r="2" fill="#E8B04B" pointer-events="none"/>`;
+  }
+  gLinks.innerHTML = out;
+}
+function renderNodes(){
+  let out = "";
+  for(const n of nodes){
+    const t = ntById(n.typeId); if(!t) continue;
+    const hot = (hover && hover.kind === "node" && hover.id === n.id) || armed === n.id;
+    const r = nodeRadius(n);
+    out += `<g transform="translate(${n.x} ${n.y})">`;
+    if(armed === n.id)
+      out += `<circle r="${r+9}" fill="none" stroke="#E8B04B" stroke-width="1.4" stroke-dasharray="3 4"/>`;
+    let labelY = r + 15;
+    const ic = t.icon ? iconById(t.icon) : null;
+    if(ic){
+      const w = t.size, h = w*(ic.h/ic.w);
+      if(hot) out += `<rect x="${-w/2-4}" y="${-h/2-4}" width="${w+8}" height="${h+8}" fill="none"
+                       stroke="${t.color}" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+      out += `<image href="${ic.src}" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" pointer-events="none"/>`;
+      labelY = h/2 + 15;
+    } else {
+      const sym = SYMBOLS[t.symbol] || SYMBOLS[0], s = t.size/56;
+      if(hot) out += `<circle r="${r+6}" fill="none" stroke="${t.color}" stroke-width="1" stroke-dasharray="2 4"/>`;
+      out += `<g transform="scale(${s.toFixed(3)})">${sym.d(t.color)}</g>`;
+      labelY = sym.r*s + 15;
+    }
+    out += `<circle class="hit" data-node="${n.id}" r="${r}" fill="transparent"/></g>`;
+  }
+  gNodes.innerHTML = out;
+}
+function renderLegend(){
+  const el = $("#legend");
+  if(!linkTypes.length && !nodeTypes.length){ el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  let html = "";
+  if(nodeTypes.length)
+    html += `<h2>${t("leg.places")}</h2><ul>` + nodeTypes.map(ty => {
+      const used = nodes.filter(n => n.typeId === ty.id).length;
+      return `<li data-nt="${ty.id}" title="${t("tt.editType")}">${symbolThumb(ty, 24)}${esc(ty.name)}${used?` · ${used}`:""}</li>`;
+    }).join("") + `</ul>`;
+  if(linkTypes.length)
+    html += `<h2>${t("leg.links")}</h2><ul>` + linkTypes.map(ty => {
+      const used = links.filter(l => l.typeId === ty.id).length;
+      return `<li data-lt="${ty.id}" title="${t("tt.editType")}">${traceThumb(ty, 58)}${esc(ty.name)}${used?` · ${used}`:""}</li>`;
+    }).join("") + `</ul>`;
+  el.innerHTML = html;
+}
+function render(){
+  layoutLabels();
+  renderLinks(); renderNodes(); renderLabels(); renderLegend(); syncTools();
+  $("#mNodes").textContent = nodes.length;
+  $("#mLinks").textContent = links.length;
+  $("#hint").style.opacity = (nodes.length || bg.src) ? 0 : 1;
+  save();
+}
+
+/* ============================ cartouche ============================ */
+
+function paramLines(el, type){
+  const p = el.params || {};
+  const keys = ((type && type.fields) || []).filter(f => p[f] != null && p[f] !== "")
+    .concat(Object.keys(p).filter(k => !((type && type.fields) || []).includes(k) && p[k] !== ""));
+  return keys.map(k => `<dt>${esc(k)}</dt><dd>${esc(p[k])}</dd>`).join("");
+}
+function showCallout(ev){
+  if(!hover){ callout.classList.remove("on"); return; }
+  let html = "";
+  if(hover.kind === "node"){
+    const n = nodeById(hover.id); if(!n) return;
+    const ty = ntById(n.typeId);
+    const deg = links.filter(l => l.a === n.id || l.b === n.id).length;
+    html = `<span class="k">${esc(ty ? ty.name : t("co.place"))}</span><div class="t">${esc(n.name)}</div>
+      <dl>${paramLines(n, ty)}<dt>${t("co.links")}</dt><dd>${deg}</dd>
+      <dt>${t("co.position")}</dt><dd>${Math.round(n.x)} · ${Math.round(n.y)}</dd></dl>`;
+  } else {
+    const l = linkById(hover.id); if(!l) return;
+    const ty = ltById(l.typeId), a = nodeById(l.a), b = nodeById(l.b), g = linkGeom(l);
+    html = `<span class="k">${esc(ty ? ty.name : t("co.link"))}</span>
+      <div class="t">${esc(a.name)} → ${esc(b.name)}</div>
+      <dl>${paramLines(l, ty)}<dt>${t("co.curve")}</dt><dd>${Math.round((l.curve||0)*100)}%</dd>
+      <dt>${t("co.distance")}</dt><dd>${Math.round(g.len)}</dd></dl>`;
+  }
+  callout.innerHTML = html;
+  callout.classList.add("on");
+  const pad = 16, w = callout.offsetWidth, h = callout.offsetHeight;
+  let x = ev.clientX + pad, y = ev.clientY + pad;
+  if(x + w > innerWidth - 8) x = ev.clientX - w - pad;
+  if(y + h > innerHeight - 8) y = ev.clientY - h - pad;
+  callout.style.left = x + "px"; callout.style.top = y + "px";
+}
+
+/* ============================ dialogue ============================ */
+
+let dlg = null;
+
+function ask(opt){
+  return new Promise(res => {
+    dlg = {opt, tile:opt.tiles ? opt.tiles.value : null, color:opt.colors ? opt.colors.value : null,
+           resolve:res, autoName:!(opt.field && opt.field.value),
+           text:opt.text ? {...DEF_LABEL, ...opt.text.value} : null,
+           toggles:Object.fromEntries((opt.toggles || []).map(t => [t.key, !!t.value])),
+           sliders:Object.fromEntries((opt.sliders || []).map(s => [s.key, s.value])),
+           params:opt.params ? opt.params.rows.map(r => ({...r})) : null,
+           paramsMode:opt.params ? (opt.params.mode || "kv") : null};
+    $("#dTitle").textContent = opt.title;
+    $("#dSub").textContent = opt.sub || "";
+    $("#dSub").classList.toggle("hidden", !opt.sub);
+    $("#dFieldWrap").classList.toggle("hidden", !opt.field);
+    if(opt.field){
+      $("#dLabel").textContent = opt.field.label || t("dlg.name");
+      const inp = $("#dInput");
+      inp.value = opt.field.value ?? "";
+      inp.placeholder = opt.field.placeholder || "";
+      inp.inputMode = opt.field.numeric ? "decimal" : "text";
+    }
+    $("#dDelete").classList.toggle("hidden", !opt.onDelete);
+    paintDlg();
+    veil.classList.add("on");
+    setTimeout(() => { const i = $("#dInput"); if(opt.field){ i.focus(); i.select(); } else $("#dOk").focus(); }, 20);
+  });
+}
+function paintDlg(){
+  const o = dlg.opt;
+  $("#dTilesWrap").classList.toggle("hidden", !o.tiles);
+  if(o.tiles){
+    $("#dTilesLabel").textContent = o.tiles.label;
+    $("#dTiles").innerHTML = o.tiles.items(dlg).map(it =>
+      `<button data-v="${it.id}" aria-pressed="${it.id === dlg.tile}">
+        <span class="thumb">${it.thumb}</span><span class="cap">${esc(it.label)}</span></button>`).join("");
+  }
+  $("#dHueWrap").classList.toggle("hidden", !o.colors);
+  if(o.colors)
+    $("#dHues").innerHTML = HUES.map(h =>
+      `<button data-c="${h}" style="background:${h}" aria-pressed="${h === dlg.color}"
+        aria-label="Couleur ${h}"></button>`).join("");
+  $("#dTextWrap").classList.toggle("hidden", !o.text);
+  if(o.text) paintText();
+  $("#dTogglesWrap").classList.toggle("hidden", !(o.toggles && o.toggles.length));
+  if(o.toggles) $("#dToggles").innerHTML = o.toggles.map(t =>
+    `<button class="tg" data-k="${t.key}" aria-pressed="${!!dlg.toggles[t.key]}">${esc(t.label)}</button>`).join("");
+  const sl = (o.sliders || []).filter(s => !s.when || s.when(dlg));
+  $("#dSlidersWrap").classList.toggle("hidden", !sl.length);
+  $("#dSliders").innerHTML = sl.map(s =>
+    `<div class="sl" data-k="${s.key}"><label class="fl">${esc(s.label)}</label>
+      <div class="srow"><input type="range" min="${s.min}" max="${s.max}" step="${s.step}"
+        value="${dlg.sliders[s.key]}"><span class="val">${dlg.sliders[s.key]}${s.unit||""}</span></div></div>`).join("");
+  $("#dParamsWrap").classList.toggle("hidden", !o.params);
+  if(o.params) paintParams();
+}
+function paintText(){
+  const st = dlg.text;
+  $("#dFont").innerHTML = FONTS.map(f =>
+    `<option value="${f.id}"${f.id === st.font ? " selected" : ""}>${t("fo."+f.id)}</option>`).join("");
+  $("#dTextStyle").querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-pressed", String(!!st[b.dataset.g])));
+  const sw = (c, sel) => `<button data-c="${c}" class="${c === "none" ? "none" : ""}"
+      style="${c === "auto" ? "background:linear-gradient(135deg,#0E1A24 50%,#F3EDE1 50%)"
+            : c === "none" ? "" : "background:"+c}" aria-pressed="${c === sel}"
+      title="${c === "auto" ? t("co.auto") : c === "none" ? t("co.none") : c}"></button>`;
+  $("#dInk").innerHTML = INKS.map(c => sw(c, st.color)).join("");
+  $("#dHalo").innerHTML = HALOS.map(c => sw(c, st.halo)).join("");
+  paintTextPrev();
+}
+function paintTextPrev(){
+  const st = dlg.text, f = fontOf(st);
+  let sample = ($("#dInput").value || dlg.opt.text.sample || "Aa").trim() || "Aa";
+  if(st.upper) sample = sample.toUpperCase();
+  const halo = st.halo && st.halo !== "none"
+    ? ` stroke="${haloOf(st.halo)}" stroke-width="${Math.max(2, st.size*.3)}" paint-order="stroke" stroke-linejoin="round"` : "";
+  $("#dTextPrev").innerHTML = `<svg width="100%" height="52" viewBox="0 0 320 52" preserveAspectRatio="xMidYMid meet">
+    <rect width="320" height="52" fill="${THEME_INK[theme].ground}"/>
+    <text x="160" y="32" text-anchor="middle" font-size="${st.size}" font-family="${f.css}"
+      ${st.bold?'font-weight="600"':''} ${st.italic?'font-style="italic"':''}
+      ${st.underline?'text-decoration="underline"':''} letter-spacing="${(f.track||0)*st.size}"
+      fill="${inkOf(st.color)}"${halo}>${esc(sample)}</text></svg>`;
+}
+$("#dFont").addEventListener("change", ev => { if(!dlg) return; dlg.text.font = ev.target.value; paintText(); });
+$("#dTextStyle").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b || !dlg) return;
+  dlg.text[b.dataset.g] = !dlg.text[b.dataset.g];
+  paintText();
+});
+$("#dInk").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b || !dlg) return;
+  dlg.text.color = b.dataset.c; paintText();
+});
+$("#dHalo").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b || !dlg) return;
+  dlg.text.halo = b.dataset.c; paintText();
+});
+$("#dToggles").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b || !dlg) return;
+  dlg.toggles[b.dataset.k] = !dlg.toggles[b.dataset.k];
+  paintDlg();
+});
+$("#dSliders").addEventListener("input", ev => {
+  const row = ev.target.closest(".sl"); if(!row || !dlg) return;
+  const k = row.dataset.k, v = +ev.target.value;
+  dlg.sliders[k] = v;
+  const spec = (dlg.opt.sliders || []).find(s => s.key === k) || {};
+  row.querySelector(".val").textContent = v + (spec.unit || "");
+  if(k === "textSize" && dlg.text){ dlg.text.size = v; paintTextPrev(); }
+});
+function paintParams(){
+  const names = dlg.paramsMode === "names";
+  $("#dParamsLabel").textContent = dlg.opt.params.label || t("pa.title");
+  $("#dParams").innerHTML = dlg.params.map((p,i) =>
+    `<div class="prow" data-i="${i}">
+      <input class="pk" value="${esc(p.k)}" placeholder="${t("pa.namePh")}">
+      ${names ? "" : `<input class="pv" value="${esc(p.v ?? "")}" placeholder="${t("pa.valuePh")}">`}
+      <button class="px" title="Retirer" aria-label="Retirer">×</button></div>`).join("")
+    || `<p class="sub" style="margin:0">${t("pa.empty")}</p>`;
+}
+$("#dParams").addEventListener("input", ev => {
+  const row = ev.target.closest(".prow"); if(!row || !dlg) return;
+  const i = +row.dataset.i;
+  if(ev.target.classList.contains("pk")) dlg.params[i].k = ev.target.value;
+  else dlg.params[i].v = ev.target.value;
+});
+$("#dParams").addEventListener("click", ev => {
+  const b = ev.target.closest(".px"); if(!b || !dlg) return;
+  dlg.params.splice(+b.closest(".prow").dataset.i, 1);
+  paintParams();
+});
+$("#dParamAdd").addEventListener("click", () => {
+  if(!dlg || !dlg.params) return;
+  dlg.params.push({k:"", v:""});
+  paintParams();
+  const f = $("#dParams").querySelectorAll(".pk");
+  if(f.length) f[f.length-1].focus();
+});
+$("#dTiles").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b || !dlg) return;
+  if(b.dataset.v === "__import"){ $("#iconPicker").click(); return; }
+  dlg.tile = b.dataset.v;
+  if(dlg.opt.onTileChange) dlg.opt.onTileChange(dlg);
+  if(dlg.opt.tiles.suggest && dlg.autoName){
+    const s = dlg.opt.tiles.suggest(dlg.tile);
+    if(s != null) $("#dInput").value = s;
+  }
+  paintDlg();
+});
+$("#dHues").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b || !dlg) return;
+  dlg.color = b.dataset.c; paintDlg();
+});
+$("#dInput").addEventListener("input", () => {
+  if(!dlg) return;
+  dlg.autoName = false;
+  if(dlg.text) paintTextPrev();
+});
+$("#iconPicker").addEventListener("change", async ev => {
+  const f = ev.target.files[0]; ev.target.value = "";
+  if(!f || !dlg) return;
+  try{
+    const im = await readImage(f, 256);
+    const ic = {id:"i"+(seq++), src:im.src, w:im.w, h:im.h};
+    icons.push(ic);
+    dlg.tile = ic.id;
+    if(dlg.opt.tiles.suggest && dlg.autoName){
+      const s = dlg.opt.tiles.suggest(ic.id);
+      if(s != null) $("#dInput").value = s;
+    }
+    paintDlg();
+  }catch(e){ alert(t("al.badImage")); }
+});
+function closeDlg(result){
+  veil.classList.remove("on");
+  const r = dlg ? dlg.resolve : null;
+  dlg = null;
+  if(r) r(result);
+}
+$("#dOk").addEventListener("click", () => {
+  if(!dlg) return;
+  closeDlg({value:$("#dInput").value.trim(), tile:dlg.tile, color:dlg.color,
+            text:dlg.text ? {...dlg.text} : null,
+            toggles:{...dlg.toggles}, sliders:{...dlg.sliders},
+            params:dlg.params ? dlg.params.map(r => ({...r})) : null});
+});
+$("#dDelete").addEventListener("click", () => {
+  if(!dlg) return;
+  const fn = dlg.opt.onDelete;
+  closeDlg(null);
+  fn();
+});
+$("#dCancel").addEventListener("click", () => { pruneIcons(); closeDlg(null); });
+$("#dInput").addEventListener("keydown", ev => { if(ev.key === "Enter") $("#dOk").click(); });
+veil.addEventListener("pointerdown", ev => { if(ev.target === veil){ pruneIcons(); closeDlg(null); } });
+function pruneIcons(){
+  const used = new Set(nodeTypes.map(t => t.icon));
+  icons = icons.filter(i => used.has(i.id));
+}
+
+/* ============================ types ============================ */
+
+function nodeTypeTiles(){
+  return () => nodeTypes.map(ty => ({id:ty.id, label:ty.name, thumb:symbolThumb(ty, 30)}))
+    .concat([{id:"__new", label:t("ti.newType"), thumb:plusGlyph()}]);
+}
+function linkTypeTiles(){
+  return () => linkTypes.map(ty => ({id:ty.id, label:ty.name, thumb:traceThumb(ty)}))
+    .concat([{id:"__new", label:t("ti.newType"), thumb:plusGlyph()}]);
+}
+function plusGlyph(){
+  return `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8B04B" stroke-width="1.6">
+    <path d="M12 5v14M5 12h14"/></svg>`;
+}
+function visualTiles(dl){
+  const cur = dl.color || HUES[0];
+  return SYMBOLS.map((s,i) => ({id:"s"+i, label:symbolName(i), thumb:symbolThumb({symbol:i, color:cur}, 30)}))
+    .concat(icons.map(ic => ({id:ic.id, label:t("ti.image"), thumb:`<img src="${ic.src}" alt="">`})))
+    .concat([{id:"__import", label:t("ti.import"), thumb:plusGlyph()}]);
+}
+function traceTiles(dl){
+  const cur = dl.color || HUES[0];
+  return TRACES.map((tr,i) => ({id:"t"+i, label:traceName(i), thumb:traceThumb({trace:i, color:cur})}));
+}
+
+async function createNodeType(preset){
+  const r = await ask({
+    title: preset ? t("ty.placeEdit") : t("ty.placeNew"),
+    sub:t("ty.placeSub"),
+    field:{label:t("ty.name"), value:preset ? preset.name : "", placeholder:t("ty.placePh")},
+    tiles:{label:t("ti.visual"), value:preset ? (preset.icon || "s"+preset.symbol) : "s0",
+           items:visualTiles, suggest:id => id.startsWith("s") ? symbolName(+id.slice(1)) : null},
+    colors:{value:preset ? preset.color : HUES[0]},
+    params:{label:t("pa.forType"), mode:"names",
+            rows:((preset && preset.fields) || []).map(f => ({k:f}))},
+    text:{value:preset ? lblStyle(preset) : DEF_LABEL, sample:preset ? preset.name : t("ty.samplePlace")},
+    sliders:[{key:"size", label:t("ty.symbolSize"), min:20, max:220, step:2,
+              value:preset ? preset.size : 56, unit:" px"},
+             {key:"textSize", label:t("ty.textSize"), min:7, max:44, step:1,
+              value:preset ? lblStyle(preset).size : DEF_LABEL.size, unit:" px"}],
+    onDelete: preset ? () => deleteNodeType(preset) : null
+  });
+  if(!r) return null;
+  const isSym = r.tile.startsWith("s");
+  const ty = preset || {id:"nt"+(seq++), fields:[]};
+  ty.name = r.value || (isSym ? symbolName(+r.tile.slice(1)) : t("co.place"));
+  ty.color = r.color; ty.size = r.sliders.size;
+  ty.label = {...r.text, size:r.sliders.textSize};
+  ty.symbol = isSym ? +r.tile.slice(1) : null;
+  ty.icon = isSym ? null : r.tile;
+  ty.fields = (r.params || []).map(p => p.k.trim()).filter(Boolean);
+  if(!preset) nodeTypes.push(ty);
+  toolNode = ty.id;
+  pruneIcons(); render();
+  return ty.id;
+}
+async function createLinkType(preset){
+  const r = await ask({
+    title: preset ? t("ty.linkEdit") : t("ty.linkNew"),
+    sub:t("ty.linkSub"),
+    field:{label:t("ty.name"), value:preset ? preset.name : "", placeholder:t("ty.linkPh")},
+    tiles:{label:t("ti.trace"), value:preset ? "t"+preset.trace : "t0", items:traceTiles,
+           suggest:id => traceName(+id.slice(1))},
+    colors:{value:preset ? preset.color : HUES[0]},
+    params:{label:t("pa.forType"), mode:"names",
+            rows:(preset ? (preset.fields || []) : [t("pa.cost")]).map(f => ({k:f}))},
+    text:{value:preset ? lblStyle(preset) : {...DEF_LABEL, font:"mono", upper:false, size:11},
+          sample:preset ? preset.name : "12"},
+    sliders:[{key:"textSize", label:t("ty.textSize"), min:7, max:44, step:1,
+              value:preset ? lblStyle(preset).size : 11, unit:" px"}],
+    onDelete: preset ? () => deleteLinkType(preset) : null
+  });
+  if(!r) return null;
+  const ty = preset || {id:"lt"+(seq++), fields:[]};
+  ty.name = r.value || traceName(+r.tile.slice(1));
+  ty.color = r.color; ty.trace = +r.tile.slice(1);
+  ty.label = {...r.text, size:r.sliders.textSize};
+  ty.fields = (r.params || []).map(p => p.k.trim()).filter(Boolean);
+  if(!preset) linkTypes.push(ty);
+  toolLink = ty.id;
+  render();
+  return ty.id;
+}
+function deleteNodeType(ty){
+  const used = nodes.filter(n => n.typeId === ty.id).length;
+  if(used && !confirm(t("al.typeUsed", {n:used, name:ty.name}))) return;
+  pushHistory();
+  const ids = new Set(nodes.filter(n => n.typeId === ty.id).map(n => n.id));
+  nodes = nodes.filter(n => !ids.has(n.id));
+  links = links.filter(l => !ids.has(l.a) && !ids.has(l.b));
+  nodeTypes = nodeTypes.filter(x => x.id !== ty.id);
+  if(toolNode === ty.id) toolNode = nodeTypes.length ? nodeTypes[0].id : null;
+  pruneIcons(); render();
+}
+function deleteLinkType(ty){
+  const used = links.filter(l => l.typeId === ty.id).length;
+  if(used && !confirm(t("al.typeUsed", {n:used, name:ty.name}))) return;
+  pushHistory();
+  links = links.filter(l => l.typeId !== ty.id);
+  linkTypes = linkTypes.filter(x => x.id !== ty.id);
+  if(toolLink === ty.id) toolLink = linkTypes.length ? linkTypes[0].id : null;
+  render();
+}
+
+/* ============================ création d'éléments ============================ */
+
+const placeToggles = el => [{key:"auto", label:t("el.autoLabel"),
+  value:!el || !el.label || el.label.auto !== false}];
+const placeSliders = el => {
+  const L = (el && el.label) || {};
+  return [
+    {key:"angle", label:t("el.angle"), min:0, max:350, step:10,
+     value:L.angle == null ? 90 : Math.round(L.angle/10)*10, unit:"°", when:dl => !dl.toggles.auto},
+    {key:"dist", label:t("el.dist"), min:0, max:160, step:2,
+     value:L.dist == null ? 28 : Math.round(L.dist), unit:" px", when:dl => !dl.toggles.auto}
+  ];
+};
+const labelFrom = r => r.toggles.auto
+  ? {auto:true}
+  : {auto:false, angle:r.sliders.angle, dist:r.sliders.dist};
+
+async function createNode(pt){
+  let typeId = toolNode, name = "", rows = paramRows(ntById(toolNode), null);
+  for(;;){
+    const r = await ask({title:t("el.newPlace"), sub:t("el.newPlaceSub"),
+      field:{label:t("el.placeName"), value:name, placeholder:t("el.placeName")},
+      tiles:{label:t("ti.placeType"), value:typeId || "__new", items:nodeTypeTiles()},
+      params:{rows}, onTileChange:dl => mergeRows(dl.params, ntById(dl.tile)),
+      toggles:placeToggles(null), sliders:placeSliders(null)});
+    if(!r) return;
+    name = r.value; rows = r.params;
+    if(r.tile === "__new" || !ntById(r.tile)){
+      const id = await createNodeType(null);
+      if(!id) return;
+      typeId = id; mergeRows(rows, ntById(id));
+      continue;
+    }
+    typeId = r.tile;
+    const ty = ntById(typeId);
+    rememberFields(ty, rows);
+    pushHistory();
+    toolNode = typeId;
+    nodes.push({id:"n"+(seq++), typeId, name:name || ty.name, x:Math.round(pt.x), y:Math.round(pt.y),
+                params:rowsToObj(rows), label:labelFrom(r)});
+    render();
+    return;
+  }
+}
+async function editNode(n){
+  if(!n) return;
+  let typeId = n.typeId, name = n.name, rows = paramRows(ntById(n.typeId), n.params);
+  for(;;){
+    const r = await ask({title:t("el.editPlace"), sub:t("el.editPlaceSub"),
+      field:{label:t("el.placeName"), value:name},
+      tiles:{label:t("ti.placeType"), value:typeId, items:nodeTypeTiles()},
+      params:{rows}, onTileChange:dl => mergeRows(dl.params, ntById(dl.tile)),
+      toggles:placeToggles(n), sliders:placeSliders(n),
+      onDelete:() => { pushHistory(); removeNode(n.id); render(); }});
+    if(!r) return;
+    name = r.value; rows = r.params;
+    if(r.tile === "__new"){
+      const id = await createNodeType(null);
+      if(!id) return;
+      typeId = id; mergeRows(rows, ntById(id));
+      continue;
+    }
+    typeId = r.tile;
+    rememberFields(ntById(typeId), rows);
+    pushHistory();
+    n.name = name || n.name; n.typeId = typeId; n.params = rowsToObj(rows); n.label = labelFrom(r);
+    render();
+    return;
+  }
+}
+async function createLink(a, b){
+  if(links.some(l => (l.a===a && l.b===b) || (l.a===b && l.b===a))) return;
+  let typeId = toolLink, rows = paramRows(ltById(toolLink), null), curve = 0;
+  for(;;){
+    const r = await ask({title:t("el.newLink"),
+      sub:t("el.linkSub", {a:nodeById(a).name, b:nodeById(b).name}),
+      tiles:{label:t("ti.linkType"), value:typeId || "__new", items:linkTypeTiles()},
+      params:{rows}, onTileChange:dl => mergeRows(dl.params, ltById(dl.tile)),
+      toggles:placeToggles(null),
+      sliders:[{key:"curve", label:t("el.curve"), min:-80, max:80, step:2,
+                value:Math.round(curve*100), unit:"%"}].concat(placeSliders(null))});
+    if(!r) return;
+    rows = r.params; curve = (r.sliders.curve ?? 0)/100;
+    if(r.tile === "__new" || !ltById(r.tile)){
+      const id = await createLinkType(null);
+      if(!id) return;
+      typeId = id; mergeRows(rows, ltById(id));
+      continue;
+    }
+    typeId = r.tile;
+    rememberFields(ltById(typeId), rows);
+    pushHistory();
+    toolLink = typeId;
+    links.push({id:"l"+(seq++), typeId, a, b, curve, params:rowsToObj(rows), label:labelFrom(r)});
+    render();
+    return;
+  }
+}
+async function editLink(l){
+  if(!l) return;
+  let typeId = l.typeId, rows = paramRows(ltById(l.typeId), l.params), curve = l.curve || 0;
+  for(;;){
+    const r = await ask({title:t("el.editLink"), sub:t("el.editLinkSub"),
+      tiles:{label:t("ti.linkType"), value:typeId, items:linkTypeTiles()},
+      params:{rows}, onTileChange:dl => mergeRows(dl.params, ltById(dl.tile)),
+      toggles:placeToggles(l),
+      sliders:[{key:"curve", label:t("el.curve"), min:-80, max:80, step:2,
+                value:Math.round(curve*100), unit:"%"}].concat(placeSliders(l)),
+      onDelete:() => { pushHistory(); links = links.filter(x => x.id !== l.id); selected = null; render(); }});
+    if(!r) return;
+    rows = r.params; curve = (r.sliders.curve ?? 0)/100;
+    if(r.tile === "__new"){
+      const id = await createLinkType(null);
+      if(!id) return;
+      typeId = id; mergeRows(rows, ltById(id));
+      continue;
+    }
+    typeId = r.tile;
+    rememberFields(ltById(typeId), rows);
+    pushHistory();
+    l.typeId = typeId; l.curve = curve; l.params = rowsToObj(rows); l.label = labelFrom(r);
+    render();
+    return;
+  }
+}
+async function askHalf(title, an, bn, l, curve){
+  let typeId = l.typeId, rows = paramRows(ltById(l.typeId), l.params);
+  for(;;){
+    const r = await ask({title, sub:t("el.linkSub", {a:an, b:bn}),
+      tiles:{label:t("ti.linkType"), value:typeId, items:linkTypeTiles()},
+      params:{rows}, onTileChange:dl => mergeRows(dl.params, ltById(dl.tile)),
+      sliders:[{key:"curve", label:t("el.curve"), min:-80, max:80, step:2,
+                value:Math.round(curve*100), unit:"%"}]});
+    if(!r) return null;
+    rows = r.params;
+    if(r.tile === "__new" || !ltById(r.tile)){
+      const id = await createLinkType(null);
+      if(!id) return null;
+      typeId = id; mergeRows(rows, ltById(id));
+      continue;
+    }
+    return {typeId:r.tile, rows, curve:(r.sliders.curve ?? 0)/100};
+  }
+}
+async function splitLink(l, at){
+  const g = linkGeom(l); if(!g) return;
+  const cut = splitQuad(g, nearestT(g, at));
+  const a = nodeById(l.a), b = nodeById(l.b);
+
+  // 1. le lieu posé à l'intersection
+  let typeId = toolNode, name = "", rows = paramRows(ntById(toolNode), null), jr = null;
+  for(;;){
+    const r = await ask({title:t("sp.title"), sub:t("sp.sub"),
+      field:{label:t("el.placeName"), value:name, placeholder:t("sp.junction")},
+      tiles:{label:t("ti.placeType"), value:typeId || "__new", items:nodeTypeTiles()},
+      params:{rows}, onTileChange:dl => mergeRows(dl.params, ntById(dl.tile)),
+      toggles:placeToggles(null), sliders:placeSliders(null)});
+    if(!r) return;
+    name = r.value; rows = r.params; jr = r;
+    if(r.tile === "__new" || !ntById(r.tile)){
+      const id = await createNodeType(null);
+      if(!id) return;
+      typeId = id; mergeRows(rows, ntById(id));
+      continue;
+    }
+    typeId = r.tile;
+    break;
+  }
+  const jname = name || t("sp.junction");
+
+  // 2. le coût de chaque moitié
+  const h1 = await askHalf(t("sp.first"), a.name, jname, l, cut.first);
+  if(!h1) return;
+  const h2 = await askHalf(t("sp.second"), jname, b.name, l, cut.second);
+  if(!h2) return;
+
+  pushHistory();
+  const jid = "n"+(seq++);
+  toolNode = typeId;
+  nodes.push({id:jid, typeId, name:jname, x:Math.round(cut.point.x), y:Math.round(cut.point.y),
+              params:rowsToObj(rows), label:labelFrom(jr)});
+  rememberFields(ntById(typeId), rows);
+  links = links.filter(x => x.id !== l.id);
+  links.push({id:"l"+(seq++), typeId:h1.typeId, a:l.a, b:jid, curve:h1.curve,
+              params:rowsToObj(h1.rows), label:{auto:true}});
+  links.push({id:"l"+(seq++), typeId:h2.typeId, a:jid, b:l.b, curve:h2.curve,
+              params:rowsToObj(h2.rows), label:{auto:true}});
+  rememberFields(ltById(h1.typeId), h1.rows);
+  rememberFields(ltById(h2.typeId), h2.rows);
+  selected = null;
+  armed = jid;                                 // la nouvelle liaison part de l'intersection
+  render();
+}
+function removeNode(id){
+  nodes = nodes.filter(n => n.id !== id);
+  links = links.filter(l => l.a !== id && l.b !== id);
+  if(armed === id) cancelLink();
+}
+
+/* ============================ interactions ============================ */
+
+let down = null;
+const ptrs = new Map();
+let pinch = null;
+
+svg.addEventListener("pointerdown", ev => {
+  if(ev.button === 2) return;
+  ptrs.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+  if(ptrs.size === 2){
+    const r = svg.getBoundingClientRect();
+    const [p1,p2] = [...ptrs.values()];
+    const cx = (p1.x+p2.x)/2 - r.left, cy = (p1.y+p2.y)/2 - r.top;
+    pinch = {d0:Math.hypot(p2.x-p1.x, p2.y-p1.y) || 1, k0:view.k,
+             wx:(cx-view.x)/view.k, wy:(cy-view.y)/view.k};
+    down = null; cancelLink(); return;
+  }
+  const d = ev.target.dataset || {};
+  svg.setPointerCapture(ev.pointerId);
+  const base = {sx:ev.clientX, sy:ev.clientY, moved:false};
+  if(d.label) down = {...base, kind:"label", id:d.label, lkind:d.lkind};
+  else if(d.handle) down = {...base, kind:"handle", id:d.handle};
+  else if(d.node){
+    const n = nodeById(d.node), w = toWorld(ev);
+    down = {...base, kind:"node", id:d.node, ox:w.x-n.x, oy:w.y-n.y};
+  }
+  else if(d.link) down = {...base, kind:"link", id:d.link};
+  else down = {...base, kind:"bg", vx:view.x, vy:view.y, bx:bg.x, by:bg.y};
+});
+
+svg.addEventListener("pointermove", ev => {
+  if(ptrs.has(ev.pointerId)) ptrs.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+  if(pinch && ptrs.size >= 2){
+    const r = svg.getBoundingClientRect();
+    const [p1,p2] = [...ptrs.values()];
+    const cx = (p1.x+p2.x)/2 - r.left, cy = (p1.y+p2.y)/2 - r.top;
+    view.k = clampK(pinch.k0*(Math.hypot(p2.x-p1.x, p2.y-p1.y)/pinch.d0));
+    view.x = cx - pinch.wx*view.k; view.y = cy - pinch.wy*view.k;
+    applyView(); return;
+  }
+  const d = ev.target.dataset || {};
+  const h = d.label ? {kind:d.lkind, id:d.label}
+          : d.node ? {kind:"node", id:d.node}
+          : d.link ? {kind:"link", id:d.link} : null;
+  if(JSON.stringify(h) !== JSON.stringify(hover)){ hover = h; renderLinks(); renderNodes(); }
+  showCallout(ev);
+
+  if(down){
+    const dx = ev.clientX - down.sx, dy = ev.clientY - down.sy;
+    if(!down.moved && Math.hypot(dx,dy) > 4) down.moved = true;
+    if(down.moved && down.kind === "bg"){
+      if(calibMode){
+        bg.x = Math.round(down.bx + dx/view.k); bg.y = Math.round(down.by + dy/view.k);
+        renderBg();
+      } else {
+        svg.classList.add("panning");
+        view.x = down.vx + dx; view.y = down.vy + dy; applyView();
+      }
+    }
+    if(down.moved && down.kind === "node"){
+      const n = nodeById(down.id), w = toWorld(ev);
+      n.x = Math.round(w.x - down.ox); n.y = Math.round(w.y - down.oy);
+      renderLinks(); renderNodes();
+    }
+    if(down.moved && down.kind === "label"){
+      const el = down.lkind === "node" ? nodeById(down.id) : linkById(down.id);
+      if(el){
+        const g = down.lkind === "node" ? null : linkGeom(el);
+        const c = g ? g.apex : {x:el.x, y:el.y};
+        const w = toWorld(ev), dx = w.x - c.x, dy = w.y - c.y;
+        let ang = Math.atan2(dy, dx)*180/Math.PI;
+        if(ang < 0) ang += 360;
+        el.label = {auto:false, angle:Math.round(ang), dist:Math.max(4, Math.round(Math.hypot(dx,dy)))};
+        layoutLabels(); renderLabels();
+      }
+    }
+    if(down.moved && down.kind === "handle"){
+      const l = linkById(down.id), g = linkGeom(l), w = toWorld(ev);
+      const off = (w.x - g.mid.x)*g.px + (w.y - g.mid.y)*g.py;
+      l.curve = Math.max(-1.5, Math.min(1.5, 2*off/g.len));
+      if(Math.abs(l.curve) < .03) l.curve = 0;
+      renderLinks();
+    }
+  }
+  if(armed) drawGhost(ev);
+});
+
+svg.addEventListener("pointerup", async ev => {
+  ptrs.delete(ev.pointerId);
+  if(pinch){ if(ptrs.size < 2) pinch = null; down = null; return; }
+  svg.classList.remove("panning");
+  const d = down; down = null;
+  if(!d) return;
+  if(d.moved){
+    if(d.kind === "node" || d.kind === "handle" || d.kind === "label" || calibMode) pushHistory();
+    save(); return;
+  }
+  if(d.kind === "handle") return;
+  if(d.kind === "label"){                        // clic simple sur un texte : on édite l'élément
+    if(d.lkind === "node") await editNode(nodeById(d.id)); else await editLink(linkById(d.id));
+    return;
+  }
+  if(d.kind === "link"){
+    if(selected === d.id){ await splitLink(linkById(d.id), toWorld(ev)); return; }
+    selected = d.id; cancelLink(); renderLinks(); return;
+  }
+  if(d.kind === "node"){
+    selected = null;
+    if(armed === null){ armed = d.id; renderNodes(); drawGhost(ev); }
+    else if(armed === d.id){ cancelLink(); await editNode(nodeById(d.id)); }
+    else { const from = armed; cancelLink(); await createLink(from, d.id); }
+    return;
+  }
+  if(armed){ cancelLink(); return; }
+  if(selected){ selected = null; renderLinks(); return; }
+  if(calibMode) return;
+  await createNode(toWorld(ev));
+});
+svg.addEventListener("pointercancel", ev => { ptrs.delete(ev.pointerId); pinch = null; down = null; });
+svg.addEventListener("pointerleave", () => { hover = null; callout.classList.remove("on"); });
+svg.addEventListener("contextmenu", ev => {
+  ev.preventDefault();
+  const d = ev.target.dataset || {};
+  if(d.node){ pushHistory(); removeNode(d.node); }
+  else if(d.link){ pushHistory(); links = links.filter(l => l.id !== d.link); }
+  else return;
+  hover = null; selected = null; callout.classList.remove("on"); render();
+});
+svg.addEventListener("dblclick", async ev => {
+  const d = ev.target.dataset || {};
+  if(d.node) await editNode(nodeById(d.node));
+  else if(d.link) await editLink(linkById(d.link));
+});
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const r = svg.getBoundingClientRect();
+  zoomAt(ev.clientX - r.left, ev.clientY - r.top, ev.deltaY < 0 ? 1.12 : 1/1.12);
+}, {passive:false});
+
+function drawGhost(ev){
+  const n = nodeById(armed);
+  if(!n){ gGhost.innerHTML = ""; return; }
+  const w = toWorld(ev);
+  const t = toolLink ? ltById(toolLink) : null;
+  const d = `M${n.x} ${n.y} L${w.x} ${w.y}`;
+  const col = t ? t.color : "#E8B04B";
+  gGhost.innerHTML = (t ? tracePaths(t, d, {hot:false})
+      : `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.6" stroke-dasharray="5 5" opacity=".6"/>`)
+    + `<circle cx="${w.x}" cy="${w.y}" r="3" fill="${col}"/>
+       <text class="cost halo" x="${(n.x+w.x)/2}" y="${(n.y+w.y)/2-9}" text-anchor="middle"
+         fill="${col}">${Math.round(Math.hypot(w.x-n.x, w.y-n.y))}</text>`;
+}
+function cancelLink(){ armed = null; gGhost.innerHTML = ""; renderNodes(); }
+
+document.addEventListener("keydown", ev => {
+  if(ev.key === "Escape"){
+    if(veil.classList.contains("on")){ pruneIcons(); closeDlg(null); }
+    else if(armed) cancelLink();
+    else if(selected){ selected = null; renderLinks(); }
+    else if(calibMode) setCalib(false);
+  }
+  if(veil.classList.contains("on")) return;
+  if(ev.key === "Delete" || ev.key === "Backspace"){
+    const t = hover || (selected ? {kind:"link", id:selected} : null);
+    if(!t) return;
+    pushHistory();
+    if(t.kind === "node") removeNode(t.id); else links = links.filter(l => l.id !== t.id);
+    hover = null; selected = null; callout.classList.remove("on"); render();
+  }
+  if((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z"){ ev.preventDefault(); undo(); }
+});
+
+/* ============================ barre d'outils ============================ */
+
+const pencil = `<svg class="edit" width="12" height="12" viewBox="0 0 24 24" fill="none"
+  stroke="currentColor" stroke-width="2"><path d="M4 20h4L20 8l-4-4L4 16v4Z"/></svg>`;
+function syncTools(){
+  $("#nodeTools").innerHTML = (nodeTypes.length
+      ? nodeTypes.map(ty => `<button data-t="${ty.id}" aria-pressed="${ty.id===toolNode}">
+          ${symbolThumb(ty, 18)}${esc(ty.name)}
+          <span data-edit="${ty.id}" title="${t("tt.editType")}">${pencil}</span></button>`).join("")
+      : `<button class="empty" disabled>${t("tt.noType")}</button>`)
+    + `<button class="plus" data-new="node" title="${t("tt.newPlaceType")}">+</button>`;
+  $("#linkTools").innerHTML = (linkTypes.length
+      ? linkTypes.map(ty => `<button data-t="${ty.id}" aria-pressed="${ty.id===toolLink}">
+          ${traceThumb(ty, 40)}${esc(ty.name)}
+          <span data-edit="${ty.id}" title="${t("tt.editType")}">${pencil}</span></button>`).join("")
+      : `<button class="empty" disabled>${t("tt.noType")}</button>`)
+    + `<button class="plus" data-new="link" title="${t("tt.newLinkType")}">+</button>`;
+}
+$("#nodeTools").addEventListener("click", ev => {
+  const e = ev.target.closest("[data-edit]");
+  if(e){ createNodeType(ntById(e.dataset.edit)); return; }
+  const b = ev.target.closest("button"); if(!b) return;
+  if(b.dataset.new) createNodeType(null);
+  else if(b.dataset.t){ toolNode = b.dataset.t; syncTools(); }
+});
+$("#linkTools").addEventListener("click", ev => {
+  const e = ev.target.closest("[data-edit]");
+  if(e){ createLinkType(ltById(e.dataset.edit)); return; }
+  const b = ev.target.closest("button"); if(!b) return;
+  if(b.dataset.new) createLinkType(null);
+  else if(b.dataset.t){ toolLink = b.dataset.t; syncTools(); }
+});
+$("#legend").addEventListener("click", ev => {
+  const li = ev.target.closest("li"); if(!li) return;
+  if(li.dataset.nt) createNodeType(ntById(li.dataset.nt));
+  else if(li.dataset.lt) createLinkType(ltById(li.dataset.lt));
+});
+$("#nodeTools").addEventListener("dblclick", ev => {
+  const b = ev.target.closest("button[data-t]"); if(!b) return;
+  createNodeType(ntById(b.dataset.t));
+});
+$("#linkTools").addEventListener("dblclick", ev => {
+  const b = ev.target.closest("button[data-t]"); if(!b) return;
+  createLinkType(ltById(b.dataset.t));
+});
+
+$("#btnAutoAll").addEventListener("click", () => {
+  if(!nodes.length && !links.length) return;
+  pushHistory();
+  nodes.forEach(n => n.label = {auto:true});
+  links.forEach(l => l.label = {auto:true});
+  render();
+});
+$("#btnTheme").addEventListener("click", () => {
+  theme = theme === "sombre" ? "clair" : "sombre";
+  applyTheme(); save();
+});
+$("#btnLang").addEventListener("click", ev => {
+  ev.stopPropagation();
+  $("#langMenu").classList.toggle("hidden");
+});
+$("#langMenu").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b) return;
+  $("#langMenu").classList.add("hidden");
+  lang = b.dataset.l;
+  applyLang(); applyTheme(); save();
+});
+$("#btnZoomIn").addEventListener("click", () => { const r = svg.getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1.25); });
+$("#btnZoomOut").addEventListener("click", () => { const r = svg.getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1/1.25); });
+$("#btnFitView").addEventListener("click", fitView);
+
+/* ============================ fond ============================ */
+
+$("#btnImg").addEventListener("click", () => $("#imgPicker").click());
+$("#imgPicker").addEventListener("change", async ev => {
+  const f = ev.target.files[0]; ev.target.value = "";
+  if(!f) return;
+  try{
+    const im = await readImage(f, 2600);
+    pushHistory();
+    bg.src = im.src; bg.w = im.w; bg.h = im.h; bg.opacity = .7;
+    fitBgToScreen(); renderBg(); setCalib(true); render();
+  }catch(e){ alert(t("al.badImage")); }
+});
+$("#btnCalib").addEventListener("click", () => { if(!bg.src) $("#imgPicker").click(); else setCalib(!calibMode); });
+$("#btnCalibDone").addEventListener("click", () => setCalib(false));
+$("#btnFitImg").addEventListener("click", () => { pushHistory(); fitBgToScreen(); renderBg(); syncCalib(); save(); });
+$("#btnImgDel").addEventListener("click", () => {
+  pushHistory();
+  bg = {src:null, x:0, y:0, w:0, h:0, scale:1, opacity:.7};
+  renderBg(); setCalib(false); render();
+});
+$("#rScale").addEventListener("input", ev => { setBgScale(+ev.target.value/100); renderBg(); syncCalib(); });
+$("#rOpacity").addEventListener("input", ev => { bg.opacity = +ev.target.value/100; renderBg(); syncCalib(); });
+$("#rScale").addEventListener("change", save);
+$("#rOpacity").addEventListener("change", save);
+$("#btnGrid").addEventListener("click", () => {
+  gridOn = !gridOn;
+  $("#btnGrid").setAttribute("aria-pressed", String(gridOn));
+  applyView();
+});
+
+/* ============================ historique ============================ */
+
+const bgGeom = () => ({x:bg.x, y:bg.y, w:bg.w, h:bg.h, scale:bg.scale, opacity:bg.opacity});
+function pushHistory(){
+  history.push(JSON.stringify({nodes, links, nodeTypes, linkTypes, seq, bg:bgGeom()}));
+  if(history.length > 60) history.shift();
+}
+function undo(){
+  const s = history.pop(); if(!s) return;
+  const d = JSON.parse(s);
+  nodes = d.nodes; links = d.links; nodeTypes = d.nodeTypes; linkTypes = d.linkTypes; seq = d.seq;
+  if(d.bg) Object.assign(bg, d.bg);
+  if(!ntById(toolNode)) toolNode = nodeTypes[0] ? nodeTypes[0].id : null;
+  if(!ltById(toolLink)) toolLink = linkTypes[0] ? linkTypes[0].id : null;
+  renderBg(); syncCalib(); cancelLink(); selected = null; render();
+}
+
+/* ============================ fichiers ============================ */
+
+const payload = () => ({nodes, links, nodeTypes, linkTypes, icons, seq, bg, lang, theme});
+
+function download(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+function contentBounds(pad = 60){
+  const xs = [], ys = [];
+  nodes.forEach(n => { const r = nodeRadius(n) + 34; xs.push(n.x-r, n.x+r); ys.push(n.y-r, n.y+r); });
+  if(bg.src){ xs.push(bg.x, bg.x + bg.w*bg.scale); ys.push(bg.y, bg.y + bg.h*bg.scale); }
+  if(!xs.length) return null;
+  const x = Math.min(...xs)-pad, y = Math.min(...ys)-pad;
+  return {x, y, w:Math.max(...xs)+pad-x, h:Math.max(...ys)+pad-y};
+}
+
+/* ---- image aplatie : fond calé + éléments ---- */
+const EXPORT_CSS = () => `text{font-family:'Barlow Condensed','Helvetica Neue',Arial,sans-serif}
+.sym-fill{fill:${theme === "sombre" ? "rgba(14,26,36,.55)" : "rgba(255,252,244,.78)"}}
+.sym-edge{stroke:${THEME_INK[theme].ground}}`;
+
+function exportPNG(){
+  const b = contentBounds();
+  if(!b){ alert(t("al.nothing")); return; }
+  selected = null; hover = null; layoutLabels(); renderLinks(); renderNodes(); renderLabels();
+  const defs = document.querySelector("#stage defs").innerHTML;
+  const ground = bg.src ? "" : `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}"
+      fill="${THEME_INK[theme].ground}"/>`;
+  const fond = bg.src
+    ? `<image href="${bg.src}" x="${bg.x}" y="${bg.y}" width="${bg.w*bg.scale}"
+        height="${bg.h*bg.scale}" opacity="${bg.opacity}"/>` : "";
+  const doc = `<svg xmlns="http://www.w3.org/2000/svg" width="${b.w}" height="${b.h}"
+      viewBox="${b.x} ${b.y} ${b.w} ${b.h}"><defs>${defs}</defs><style>${EXPORT_CSS()}</style>
+      ${ground}${fond}${gLinks.innerHTML}${gNodes.innerHTML}${$("#gLabels").innerHTML}</svg>`;
+  const scale = Math.max(1, Math.min(2, 8000/Math.max(b.w, b.h)));
+  const url = URL.createObjectURL(new Blob([doc], {type:"image/svg+xml;charset=utf-8"}));
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = Math.round(b.w*scale); c.height = Math.round(b.h*scale);
+    const ctx = c.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    c.toBlob(bl => { if(bl) download(bl, "carte.png"); URL.revokeObjectURL(url); }, "image/png");
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert(t("al.flatten")); };
+  img.src = url;
+}
+
+/* ---- données : tout ce qu'il faut pour reconstruire à l'identique ---- */
+function dataPayload(withBg){
+  const ordre = nodes.map(n => n.id);
+  const idx = Object.fromEntries(ordre.map((id,i) => [id,i]));
+  const cellules = ordre.map(() => ordre.map(() => null));
+  links.forEach(l => {
+    const i = idx[l.a], j = idx[l.b];
+    if(i == null || j == null) return;
+    const cell = {liaison:l.id, type:l.typeId, params:l.params || {}, courbure:l.curve || 0};
+    cellules[i][j] = cell; cellules[j][i] = cell;
+  });
+  return {
+    format:"atlas-carte", version:3, genere:new Date().toISOString(),
+    typesLieux:nodeTypes, typesLiaisons:linkTypes, icones:icons,
+    lieux:nodes, liaisons:links,
+    matrice:{ordre, cellules},           // vue redondante, pratique à relire ailleurs
+    cadre:contentBounds(0),
+    fond: withBg ? bg : {...bg, src:null},
+    seq
+  };
+}
+function exportJSON(withBg){
+  const blob = new Blob([JSON.stringify(dataPayload(withBg), null, 2)], {type:"application/json"});
+  download(blob, withBg ? "carte-complete.json" : "carte-donnees.json");
+}
+
+$("#btnExport").addEventListener("click", ev => {
+  ev.stopPropagation();
+  $("#exportMenu").classList.toggle("hidden");
+});
+$("#exportMenu").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b) return;
+  $("#exportMenu").classList.add("hidden");
+  if(b.dataset.x === "png") exportPNG(); else exportJSON(b.dataset.x === "full");
+});
+document.addEventListener("click", () => {
+  $("#exportMenu").classList.add("hidden");
+  $("#resetMenu").classList.add("hidden");
+  $("#langMenu").classList.add("hidden");
+});
+$("#btnImport").addEventListener("click", () => $("#filePicker").click());
+$("#filePicker").addEventListener("change", ev => {
+  const f = ev.target.files[0]; if(!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try{
+      const d = JSON.parse(fr.result);
+      pushHistory();
+      nodes = d.lieux || d.nodes || []; links = d.liaisons || d.links || [];
+      nodeTypes = d.typesLieux || d.nodeTypes || []; linkTypes = d.typesLiaisons || d.linkTypes || [];
+      icons = d.icones || d.icons || [];
+      seq = Math.max(d.seq || 0, nodes.length + links.length + nodeTypes.length + linkTypes.length + 10);
+      const fond = d.fond || d.bg;
+      if(fond) Object.assign(bg, fond);
+      toolNode = nodeTypes[0] ? nodeTypes[0].id : null;
+      toolLink = linkTypes[0] ? linkTypes[0].id : null;
+      renderBg(); syncCalib(); cancelLink(); selected = null; render();
+    }catch(e){ alert(t("al.badFile")); }
+  };
+  fr.readAsText(f); ev.target.value = "";
+});
+function clearElements(){ nodes = []; links = []; selected = null; cancelLink(); }
+function clearTypes(){
+  clearElements();
+  nodeTypes = []; linkTypes = []; icons = [];
+  toolNode = null; toolLink = null;
+}
+function clearBg(){
+  bg = {src:null, x:0, y:0, w:0, h:0, scale:1, opacity:.7};
+  renderBg(); setCalib(false);
+}
+$("#btnReset").addEventListener("click", ev => {
+  ev.stopPropagation();
+  $("#resetMenu").classList.toggle("hidden");
+});
+$("#resetMenu").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if(!b) return;
+  $("#resetMenu").classList.add("hidden");
+  const what = b.dataset.r;
+  if(what === "els"){ if(!confirm(t("al.clearEls"))) return; pushHistory(); clearElements(); }
+  if(what === "types"){ if(!confirm(t("al.resetTypes"))) return; pushHistory(); clearTypes(); }
+  if(what === "bg"){ pushHistory(); clearBg(); }
+  if(what === "all"){ if(!confirm(t("al.resetAll"))) return; pushHistory(); clearTypes(); clearBg(); }
+  render();
+});
+
+async function save(){
+  try{
+    if(!window.storage) return;
+    let txt = JSON.stringify(payload());
+    if(txt.length > 4_000_000) txt = JSON.stringify({...payload(), bg:{...bg, src:null}});
+    if(txt.length > 4_000_000) return;
+    await window.storage.set("atlas:carte:v3", txt);
+  }catch(e){}
+}
+async function load(){
+  try{
+    if(window.storage){
+      const r = await window.storage.get("atlas:carte:v3");
+      if(r && r.value){
+        const d = JSON.parse(r.value);
+        nodes = d.nodes || []; links = d.links || [];
+        nodeTypes = d.nodeTypes || []; linkTypes = d.linkTypes || [];
+        icons = d.icons || []; seq = d.seq || 100;
+        if(d.bg) Object.assign(bg, d.bg);
+        if(d.lang && I18N[d.lang]) lang = d.lang;
+        if(d.theme) theme = d.theme;
+        toolNode = nodeTypes[0] ? nodeTypes[0].id : null;
+        toolLink = linkTypes[0] ? linkTypes[0].id : null;
+      }
+    }
+  }catch(e){}
+  applyView(); renderBg(); syncCalib(); applyLang(); applyTheme();
+}
+load();
+addEventListener("resize", applyView);
+
+})();
+</script>
+</body>
+</html>
