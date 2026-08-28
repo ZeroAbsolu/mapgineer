@@ -93,7 +93,7 @@ donc une traduction partielle fonctionne déjà.
 ## Licence
 
 <a href="https://github.com/ZeroAbsolu/mapgineer">Mapgineer</a> © 2026 par
-<a href="https://github.com/ZeroAbsolu">Kevin NIVA</a> est distribué sous licence
+<a href="https://github.com/ZeroAbsolu">ZeroAbsolu</a> est distribué sous licence
 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>.
 
 Partagez-le, modifiez-le, traduisez-le : il faut créditer l'auteur, signaler vos modifications,
