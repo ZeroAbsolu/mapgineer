@@ -59,7 +59,7 @@ l'ouvre dans un navigateur et on dessine.
 
 ## Démarrer
 
-1. Téléchargez `editeur-carte.html`.
+1. Téléchargez `mapgineer.html`.
 2. Ouvrez-le dans un navigateur récent (Chrome, Firefox, Edge, Safari).
 3. Cliquez n'importe où sur la carte : le premier lieu, et son premier type, se créent dans la
    foulée.
@@ -73,7 +73,7 @@ exportez en JSON — c'est le format qui restitue tout, jusqu'aux icônes import
 
 | Fichier | Rôle |
 |---|---|
-| `editeur-carte.html` | l'application entière |
+| `mapgineer.html` | l'application entière |
 | `guide-utilisateur.md` | le guide complet, en français |
 | `user-guide.md` | le même en anglais, avec la marche à suivre pour ajouter une locale |
 | `LICENSE.md` | la licence et le détail des droits qu'elle accorde |
