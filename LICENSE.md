@@ -47,7 +47,7 @@ Ready-made attribution, HTML:
 
 ```html
 <a href="https://github.com/ZeroAbsolu/mapgineer">Mapgineer</a> © 2026 by
-<a href="https://github.com/ZeroAbsolu">Kevin NIVA</a> is licensed under
+<a href="https://github.com/ZeroAbsolu">ZeroAbsolu</a> is licensed under
 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>
 ```
 
